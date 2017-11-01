@@ -124,9 +124,9 @@ export_list portable_executable::get_exports(uintptr_t image_base)
 	for( register unsigned int iter = 0; iter < export_dir->NumberOfFunctions; ++iter )
 	{
 		export_data data = { 0 };
-		data.name = reinterpret_cast< char * >( image_base + reinterpret_cast< unsigned long * >( image_base + export_dir->AddressOfNames )[ Iter ] );
-		data.ordinal = reinterpret_cast< unsigned short * >( image_base + export_dir->AddressOfNameOrdinals )[ Iter ];
-		data.function_rva = reinterpret_cast< uintptr_t >( image_base + reinterpret_cast< unsigned long * >( image_base + export_dir->AddressOfFunctions )[ Iter ] );
+		data.name = reinterpret_cast< char * >( image_base + reinterpret_cast< unsigned long * >( image_base + export_dir->AddressOfNames )[ iter ] );
+		data.ordinal = reinterpret_cast< unsigned short * >( image_base + export_dir->AddressOfNameOrdinals )[ iter ];
+		data.function_rva = reinterpret_cast< uintptr_t >( image_base + reinterpret_cast< unsigned long * >( image_base + export_dir->AddressOfFunctions )[ iter ] );
 
 		exports[ data.name ].emplace_back( data );
 	}
