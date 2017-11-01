@@ -29,6 +29,7 @@ struct export_data
 {
 	std::string name;
 	uintptr_t function_rva;
+	uint16_t ordinal;
 };
 
 using relocation_list = std::vector<std::pair<reloc_data, reloc_item>>;
