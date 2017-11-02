@@ -23,7 +23,7 @@ int main()
 		auto injector = injection::manualmap(proc);
 
 		// READ LITTLEBRO FROM DISK FOR INJECTION
-		auto littlebro_buffer = binary_file::read_file("D:\\Sync\\Programming\\C++\\Projects\\latebros\\x64\\Release\\littlebro.dll");
+		auto littlebro_buffer = binary_file::read_file("littlebro.dll");
 
 		// MAP LITTLEBRO INTO TARGET PROCESS
 		auto littlebro = injector.inject(littlebro_buffer);
