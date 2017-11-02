@@ -37,9 +37,6 @@
     <Filter Include="Source Files\Wrapper">
       <UniqueIdentifier>{7204e0d4-6941-4342-b130-5b7c905b2254}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Shellcodes">
-      <UniqueIdentifier>{352ecd43-9a8e-4ec4-9998-d2ae56da30c6}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -110,10 +107,5 @@
     <ClCompile Include="api_set.cpp">
       <Filter>Source Files\Helpers</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="dllmain_call_x64.asm">
-      <Filter>Shellcodes</Filter>
-    </None>
   </ItemGroup>
 </Project>

@@ -118,17 +118,17 @@ export_list portable_executable::get_exports(uintptr_t image_base)
 {
 	export_list exports;
 
-	auto section = this->optional_header.DataDirectory[ IMAGE_DIRECTORY_ENTRY_EXPORT ];
-	auto export_dir = reinterpret_cast< IMAGE_EXPORT_DIRECTORY * >( image_base + section.VirtualAddress );
+	auto section = this->optional_header.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+	auto export_dir = reinterpret_cast<IMAGE_EXPORT_DIRECTORY *>(image_base + section.VirtualAddress);
 
-	for( unsigned int iter = 0; iter < export_dir->NumberOfFunctions; ++iter )
+	for (unsigned int iter = 0; iter < export_dir->NumberOfFunctions; ++iter)
 	{
 		export_data data = { 0 };
-		data.name = reinterpret_cast< char * >( image_base + reinterpret_cast< unsigned long * >( image_base + export_dir->AddressOfNames )[ iter ] );
-		data.ordinal = reinterpret_cast< unsigned short * >( image_base + export_dir->AddressOfNameOrdinals )[ iter ];
-		data.function_rva = reinterpret_cast< uintptr_t >( image_base + reinterpret_cast< unsigned long * >( image_base + export_dir->AddressOfFunctions )[ iter ] );
+		data.name = reinterpret_cast<char *>(image_base + reinterpret_cast<unsigned long *>(image_base + export_dir->AddressOfNames)[iter]);
+		data.ordinal = reinterpret_cast<unsigned short *>(image_base + export_dir->AddressOfNameOrdinals)[iter];
+		data.function_rva = image_base + reinterpret_cast<unsigned long*>(image_base + export_dir->AddressOfFunctions)[iter];
 
-		exports[ data.name ].emplace_back( data );
+		exports[data.name].emplace_back(data);
 	}
 
 	return exports;

