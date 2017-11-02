@@ -262,21 +262,33 @@ extern "C" FARPROC  __declspec(dllexport) WINAPI gpa(HMODULE module, LPCSTR proc
 
 	auto module_name = std::string(module_name_buffer);
 
-	if (module_name == "kernel32.dll")
+	std::string module_database[ MAX_MODULE_SEARCH_PARAM ] =
 	{
-		if (procedure_name == "OpenProcess")
-			return reinterpret_cast<FARPROC>(op);
-		else if (procedure_name == "TerminateProcess")
-			return reinterpret_cast<FARPROC>(kterm);
-		else if (procedure_name == "GetProcAddress") // ¯\_(ツ)_/¯ WHO KNOWS?
-			return reinterpret_cast<FARPROC>(gpa);
-	}
-	else if (module_name == "ntdll.dll")
+		{ "kernel32.dll" },
+		{ "ntdll.dll" }
+	};
+
+	std::unordered_map< std::string, FARPROC > hook_database =
 	{
-		if (procedure_name == "NtOpenProcess")
-			return reinterpret_cast<FARPROC>(ntop);
-		else if (procedure_name == "NtTerminateProcess")
-			return reinterpret_cast<FARPROC>(ntterm);
+		{ "OpenProcess", reinterpret_cast< FARPROC >( op ) },
+		{ "TerminateProcess", reinterpret_cast< FARPROC >( kterm ) },
+		{ "GetProcAddress", reinterpret_cast< FARPROC >( gpa ) },
+		{ "NtOpenProcess", reinterpret_cast< FARPROC >( ntop ) },
+		{ "NtTerminateProcess", reinterpret_cast< FARPROC >( ntterm ) }
+	};
+
+	for( const auto &mod : module_database )
+	{
+		if( module_name == mod )
+		{
+			for( const auto &[name, address] : hook_database )
+			{
+				if( procedure_name == name )
+				{
+					return address;
+				}
+			}
+		}
 	}
 
 	return function_pointer;

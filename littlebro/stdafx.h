@@ -8,4 +8,8 @@
 #include <Psapi.h>
 #include <string>
 #include <unordered_set>
+#include <unordered_map>
 #include <vector>
+
+#define MAX_MODULE_SEARCH_PARAM						0x02
+#define MAX_HOOK_SEARCH_PARAM						0x05
