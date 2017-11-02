@@ -119,7 +119,7 @@ export_list portable_executable::get_exports(uintptr_t image_base)
 	export_list exports;
 
 	auto section = this->optional_header.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
-	auto export_dir = reinterpret_cast<IMAGE_EXPORT_DIRECTORY *>(image_base + section.VirtualAddress);
+	auto export_dir = reinterpret_cast<IMAGE_EXPORT_DIRECTORY*>(image_base + section.VirtualAddress);
 
 	for (unsigned int iter = 0; iter < export_dir->NumberOfFunctions; ++iter)
 	{
