@@ -24,6 +24,7 @@ typedef NTSTATUS(NTAPI* fnNtMapViewOfSection)(HANDLE          SectionHandle,
 namespace ntdll
 {
 	void initialise();
+	uintptr_t get_procedure_address(void *module, std::string procedure_name);
 	extern fnNtCreateSection NtCreateSection;
 	extern fnNtMapViewOfSection NtMapViewOfSection;
 }
