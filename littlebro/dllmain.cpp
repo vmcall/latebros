@@ -249,37 +249,26 @@ extern "C" BOOL __declspec(dllexport) WINAPI enump(DWORD* process_ids, DWORD cb,
  * Purpose: Redirect dynamic imports to function hooks
  *
  */
-using hook_container = std::unordered_map<std::string, void*>;
+//using hook_container = std::unordered_map<std::pair<std::string, std::string>, void*>;
+using hook_container = std::vector<std::tuple<std::string, std::string, void*>>;
 extern "C" FARPROC  __declspec(dllexport) WINAPI gpa(HMODULE module, LPCSTR procedure_name)
 {
 	char module_name[50] = {};
 	GetModuleBaseNameA(GetCurrentProcess(), module, module_name, sizeof(module_name));
 
-	std::string module_database[MAX_MODULE_SEARCH_PARAM] =
-	{
-		{ "kernel32.dll" },
-		{ "ntdll.dll" }
-	};
-
 	hook_container db =
 	{
-		{ "OpenProcess", op },
-		{ "TerminateProcess", kterm },
-		{ "GetProcAddress", gpa },
-		{ "NtOpenProcess", ntop },
-		{ "NtTerminateProcess", ntterm }
+		{ "kernel32.dll", "OpenProcess", op },
+		{ "kernel32.dll", "TerminateProcess", kterm },
+		{ "kernel32.dll", "GetProcAddress", gpa },
+		{ "ntdll.dll", "NtOpenProcess", ntop },
+		{ "ntdll.dll", "NtTerminateProcess", ntterm }
 	};
 
-	for (const auto &mod : module_database)
+	for (const auto [hook_module_name, hook_function_name, hook_pointer] : db)
 	{
-		if (mod != module_name)
-			continue;
-
-		for (const auto&[name, address] : db)
-		{
-			if (procedure_name == name)
-				return reinterpret_cast<FARPROC>(address);
-		}
+		if (hook_module_name == module_name && hook_function_name == procedure_name)
+			return reinterpret_cast<FARPROC>(hook_pointer);
 	}
 
 	return GetProcAddress(module, procedure_name);

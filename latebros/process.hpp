@@ -17,7 +17,8 @@ public:
 
 #pragma region Statics
 	static process current_process();
-	static uint32_t from_name(const std::string& process_name);
+	static std::vector<uint32_t> get_all_from_name(const std::string& process_name);
+	static std::vector<uint32_t> get_all();
 #pragma endregion
 
 #pragma region Memory

@@ -25,8 +25,10 @@ process process::current_process()
 	return process(reinterpret_cast<HANDLE>(-1));
 }
 
-uint32_t process::from_name(const std::string& process_name)
+std::vector<uint32_t> process::get_all_from_name(const std::string& process_name)
 {
+	std::vector<uint32_t> processes;
+
 	DWORD process_list[516], bytes_needed;
 	if (EnumProcesses(process_list, sizeof(process_list), &bytes_needed))
 	{
@@ -38,11 +40,31 @@ uint32_t process::from_name(const std::string& process_name)
 				continue;
 
 			if (process_name == proc.get_name())
-				return process_list[index];
+				processes.emplace_back(process_list[index]);
 		}
 	}
 
-	return 0;
+	return processes;
+}
+std::vector<uint32_t> process::get_all()
+{
+	std::vector<uint32_t> processes;
+
+	DWORD process_list[516], bytes_needed;
+	if (EnumProcesses(process_list, sizeof(process_list), &bytes_needed))
+	{
+		for (size_t index = 0; index < bytes_needed / sizeof(uint32_t); index++)
+		{
+			auto proc = process(process_list[index], PROCESS_ALL_ACCESS);
+
+			if (!proc)
+				continue;
+			
+			processes.emplace_back(process_list[index]);
+		}
+	}
+
+	return processes;
 }
 
 MEMORY_BASIC_INFORMATION process::virtual_query(const uintptr_t address)
