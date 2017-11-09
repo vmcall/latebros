@@ -3,7 +3,8 @@
 #include "safe_handle.hpp"
 #include "memory_section.hpp"
 
-using hooked_functions = std::unordered_map<uintptr_t, uintptr_t>;
+using hook_map = std::unordered_map<uintptr_t, uintptr_t>;
+using detour_map = std::unordered_map<uintptr_t, std::vector<std::byte>>;
 using wstring_converter = std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>;
 
 class process
@@ -64,8 +65,10 @@ public:
 #pragma endregion
 
 #pragma region Hooks
-	bool hook_function(const std::string& module_name, const std::string& function_name, const uintptr_t hook_pointer);
-	bool unhook_function(const std::string& module_name, const std::string& function_name, const uintptr_t hook_pointer);
+	bool detour_function(const std::string& module_name, const std::string& function_name, const uintptr_t littlebro, const std::string& hook_name);
+	bool reset_detour(const std::string& module_name, const std::string& function_name, const uintptr_t littlebro, const std::string& hook_name);
+	bool detour_import_entry(const std::string& module_name, const std::string& function_name, const uintptr_t hook_pointer);
+	bool reset_import_entry(const std::string& module_name, const std::string& function_name, const uintptr_t hook_pointer);
 #pragma endregion
 
 #pragma region Information
@@ -82,7 +85,8 @@ public:
 
 private:
 	safe_handle handle;
-	hooked_functions hooks;
+	hook_map import_entry_detours;
+	detour_map detours;
 };
 
 

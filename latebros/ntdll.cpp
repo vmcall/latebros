@@ -31,25 +31,27 @@ Return Value:
 --*/
 uintptr_t ntdll::get_procedure_address(void *module, std::string procedure_name)
 {
-	std::uint8_t *base = reinterpret_cast<std::uint8_t *>(module);
+
+	return reinterpret_cast<uintptr_t>(GetProcAddress(reinterpret_cast<HMODULE>(module), procedure_name.c_str()));
+
+	// TODO: FIX
+	std::uint8_t* base = reinterpret_cast<std::uint8_t*>(module);
 	
 	PIMAGE_DOS_HEADER dos_header = reinterpret_cast<PIMAGE_DOS_HEADER>(base);
 
-	if (dos_header->e_magic = 0x5A4D) {
-#if defined(_M_IX86)
-		PIMAGE_NT_HEADERS32 nt_header = reinterpret_cast<PIMAGE_NT_HEADERS32>(base + dos_header->e_lfanew);
-#elif defined(_M_AMD64)
+	if (dos_header->e_magic == 0x5A4D) {
 		PIMAGE_NT_HEADERS64 nt_header = reinterpret_cast<PIMAGE_NT_HEADERS64>(base + dos_header->e_lfanew);
-#endif
 
 		if (nt_header->Signature == 0x4550) {
 			auto export_dir = reinterpret_cast<PIMAGE_EXPORT_DIRECTORY>(base + nt_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress);
 
+			auto names = reinterpret_cast<uintptr_t*>(base + export_dir->AddressOfNames);
 			for (auto iter = 0; iter < export_dir->NumberOfNames; iter++) {
-				std::string name = reinterpret_cast<char *>(base + reinterpret_cast<uintptr_t *>(base + export_dir->AddressOfNames)[iter]);
+
+				std::string name = reinterpret_cast<const char*>(base + names[iter]);
 				if (procedure_name == name) {
-					std::uint16_t ordinal = reinterpret_cast<std::uint16_t *>(base + export_dir->AddressOfNameOrdinals)[iter];
-					return reinterpret_cast<uintptr_t>(base + reinterpret_cast<uintptr_t *>(base + export_dir->AddressOfFunctions)[ordinal]);
+					std::uint16_t ordinal = reinterpret_cast<std::uint16_t*>(base + export_dir->AddressOfNameOrdinals)[iter];
+					return reinterpret_cast<uintptr_t>(base + reinterpret_cast<uintptr_t*>(base + export_dir->AddressOfFunctions)[ordinal]);
 				}
 			}
 		}

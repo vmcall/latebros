@@ -75,6 +75,9 @@
     <ClInclude Include="api_set.hpp">
       <Filter>Header Files\Helpers</Filter>
     </ClInclude>
+    <ClInclude Include="detour.hpp">
+      <Filter>Header Files\Helpers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -105,6 +108,9 @@
       <Filter>Source Files\Wrapper</Filter>
     </ClCompile>
     <ClCompile Include="api_set.cpp">
+      <Filter>Source Files\Helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="detour.cpp">
       <Filter>Source Files\Helpers</Filter>
     </ClCompile>
   </ItemGroup>
