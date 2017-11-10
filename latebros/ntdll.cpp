@@ -48,7 +48,7 @@ uintptr_t ntdll::get_procedure_address(void *module, std::string procedure_name)
 				IMAGE_EXPORT_DIRECTORY *export_dir = reinterpret_cast<IMAGE_EXPORT_DIRECTORY *>(module_base + nt_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress);
 				for (unsigned int iter = 0; iter < export_dir->NumberOfNames; ++iter)
 				{
-					char *name_table = reinterpret_cast< char * >(module_base + reinterpret_cast<unsigned long *>(module_base + export_dir->AddressOfNames)[iter]);
+					char *name_table = reinterpret_cast<char *>(module_base + reinterpret_cast<unsigned long *>(module_base + export_dir->AddressOfNames)[iter]);
 					if (!strcmp( name_table, procedure_name.c_str() ))
 					{
 						unsigned short ordinal = reinterpret_cast<unsigned short *>(module_base + export_dir->AddressOfNameOrdinals)[iter];
