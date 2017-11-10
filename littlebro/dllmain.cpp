@@ -71,7 +71,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntsusp(HANDLE process_handle)
  *
  */
 typedef NTSTATUS(NTAPI *NtOpenProcess_t)(PHANDLE ProcessHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes, _CLIENT_ID* ClientId);
-extern "C" char __declspec(dllexport) ntop_og[0xE] = {}; // ORIGINAL BYTES
+extern "C" char __declspec(dllexport) ntop_og[0xF] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) NTAPI ntop(PHANDLE out_handle, ACCESS_MASK desired_access, POBJECT_ATTRIBUTES object_attributes, _CLIENT_ID* client_id)
 {
 	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtOpenProcess"));

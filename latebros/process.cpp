@@ -365,7 +365,7 @@ bool process::detour_function(const std::string& module_name, const std::string&
 	}
 
 	// READ OLD BYTES
-	char original_bytes[0xE] = {};
+	char original_bytes[0xF] = {};
 	this->read_raw_memory(original_bytes, function_address, sizeof(original_bytes));
 
 	// WRITE OLD BYTES TO EXPORTED DATA CONTAINER
