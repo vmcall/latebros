@@ -119,7 +119,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntop(PHANDLE out_handle, ACCESS_
 		}
 	}
 
-	return ERROR_SUCCESS; // SUCCESS
+	return STATUS_SUCCESS; // SUCCESS
 }
 
 
@@ -184,3 +184,67 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 
 	return result;
 }
+
+/*
+* Function: ntdll!NtCreateFile
+* Purpose: Protect any LATEBROS files by preventing file handles to be opened
+*
+*/
+extern "C" char __declspec(dllexport) ntcr_og[0xF] = {}; // ORIGINAL BYTES
+extern "C" NTSTATUS __declspec(dllexport) NTAPI ntcr(
+	PHANDLE file_handle, ACCESS_MASK desired_access, POBJECT_ATTRIBUTES object_attributes, PIO_STATUS_BLOCK io_status_block, 
+	PLARGE_INTEGER allocation_size, ULONG file_attributes, ULONG share_access, ULONG create_disposition,
+	ULONG create_options, PVOID ea_buffer, ULONG ea_length)
+{
+	if (object_attributes && object_attributes->ObjectName && object_attributes->ObjectName->Buffer)
+	{
+		std::wstring file_name = object_attributes->ObjectName->Buffer;
+
+		if (file_name.find(L"LATEBROS_") != std::wstring::npos)
+			return STATUS_NOT_FOUND;
+	}
+
+	auto function_pointer = reinterpret_cast<uintptr_t>(NtCreateFile);
+
+	// RESTORE
+	detour::remove_detour(function_pointer, ntcr_og, sizeof(ntcr_og));
+
+	// CALL
+	auto result = NtCreateFile(file_handle, desired_access, object_attributes, io_status_block, allocation_size, file_attributes, share_access, create_disposition,	create_options, ea_buffer, ea_length);
+
+	// REHOOK
+	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntcr));
+
+	return result;
+}
+
+/*
+* Function: ntdll!NtOpenFile
+* Purpose: Protect any LATEBROS files by preventing file handles to be opened
+*
+*/
+extern "C" char __declspec(dllexport) ntopf_og[0xF] = {}; // ORIGINAL BYTES
+extern "C" NTSTATUS __declspec(dllexport) NTAPI ntopf(PHANDLE file_handle, ACCESS_MASK desired_access, POBJECT_ATTRIBUTES object_attributes, PIO_STATUS_BLOCK io_status_block, ULONG share_access, ULONG open_options)
+{
+	if (object_attributes && object_attributes->ObjectName && object_attributes->ObjectName->Buffer)
+	{
+		std::wstring file_name = object_attributes->ObjectName->Buffer;
+
+		if (file_name.find(L"LATEBROS_") != std::wstring::npos)
+			return STATUS_NOT_FOUND;
+	}
+
+	auto function_pointer = reinterpret_cast<uintptr_t>(NtOpenFile);
+
+	// RESTORE
+	detour::remove_detour(function_pointer, ntopf_og, sizeof(ntopf_og));
+
+	// CALL
+	auto result = NtOpenFile(file_handle, desired_access, object_attributes, io_status_block, share_access, open_options);
+
+	// REHOOK
+	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntopf));
+
+	return result;
+}
+

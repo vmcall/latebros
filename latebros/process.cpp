@@ -164,7 +164,11 @@ std::string process::get_name()
 	char buffer[MAX_PATH];
 	GetModuleBaseNameA(handle.get_handle(), nullptr, buffer, MAX_PATH);
 
-	return std::string(buffer);
+	auto name = std::string(buffer);
+
+	std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+
+	return name;
 }
 
 uintptr_t process::get_import(const std::string& module_name, const std::string& function_name)
