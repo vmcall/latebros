@@ -17,14 +17,13 @@ int main()
 	hook_container container =
 	{
 		// HOOK AS LOW AS POSSIBLE TO PREVENT CIRCUMVENTIONS
-		//{ "kernel32.dll", "K32EnumProcesses", "enump" },
-		//{ "ntdll.dll", "NtTerminateProcess", "ntterm" },
-		//{ "ntdll.dll", "NtSuspendProcess", "ntsusp" },
+		{ "ntdll.dll", "NtTerminateProcess", "ntterm" },
+		{ "ntdll.dll", "NtSuspendProcess", "ntsusp" },
 		{ "ntdll.dll", "NtOpenProcess", "ntop" },
-		//{ "ntdll.dll", "NtQuerySystemInformation", "qsi" }
+		{ "ntdll.dll", "NtQuerySystemInformation", "qsi" }
 	};
 
-	for (const auto& process_name : { "taskmgr.exe", "ProcessHacker.exe" })
+	for (const auto& process_name : { "taskmgr.exe", "ProcessHacker.exe", "Project1.exe" })
 	{
 		auto process_list = process::get_all_from_name(process_name);
 
