@@ -21,6 +21,8 @@ typedef NTSTATUS(NTAPI* fnNtMapViewOfSection)(HANDLE          SectionHandle,
 	ULONG           AllocationType,
 	ULONG           Win32Protect);
 
+__forceinline uint32_t CompareStrings( const char* StringA, const wchar_t* StringB );
+
 namespace ntdll
 {
 	void initialise();
