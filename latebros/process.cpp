@@ -375,7 +375,6 @@ bool process::detour_function(const std::string& module_name, const std::string&
 	// WRITE OLD BYTES TO EXPORTED DATA CONTAINER
 	auto exported_container = this->get_module_export(littlebro, (hook_name + "_og").c_str());
 	this->write_raw_memory(original_bytes, sizeof(original_bytes), exported_container);
-	logger::log_formatted("exported_container", exported_container, true);
 
 	// DETOUR FUNCTION
 	auto hook_pointer = this->get_module_export(littlebro, hook_name.c_str());

