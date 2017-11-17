@@ -65,6 +65,6 @@ int main()
 
 	logger::log("Finished!");
 	std::cin.get();
-    return 0;
+	return 0;
 }
 
