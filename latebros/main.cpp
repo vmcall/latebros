@@ -15,7 +15,7 @@ int main()
 	ntdll::initialise();
 
 	// READ LITTLEBRO FROM DISK FOR INJECTION
-	auto littlebro_buffer = binary_file::read_file("littlebro.dll");
+	const auto littlebro_buffer = binary_file::read_file("littlebro.dll");
 
 	// SETUP HOOK CONTAINER
 	// FORMAT: MODULE NAME, FUNCTION NAME, EXPORT NAME
@@ -58,7 +58,7 @@ int main()
 
 			// FILL HEADER SECTION WITH PSEUDO-RANDOM DATA WITH HIGH ENTROPY
 			auto junk_buffer = std::vector<std::uint8_t>(0x1000);
-			std::generate(junk_buffer.begin(), junk_buffer.end(), [] { return rng::get_int<uint16_t>(0x00, 0xFF); }); 
+			std::generate(junk_buffer.begin(), junk_buffer.end(), [] { return static_cast<uint8_t>(rng::get_int<uint16_t>(0x00, 0xFF)); }); 
 			proc.write_raw_memory(junk_buffer.data(), 0x1000, littlebro);
 		}
 	}
