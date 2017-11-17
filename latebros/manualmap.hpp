@@ -8,12 +8,12 @@ struct map_ctx
 	std::string image_name;
 	portable_executable pe;
 
-	union {
+	union { // UB
 		uintptr_t local_image;
 		void* local_image_void;
 
 	};
-	union {
+	union { // UB
 		uintptr_t remote_image;
 		void* remote_image_void;
 	};
@@ -25,6 +25,7 @@ struct map_ctx
 		image_name(new_image_name), pe(new_buffer) {}
 };
 
+// DEPRECATED - TODO
 using wstring_converter = std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>;
 using module_list = std::unordered_map<std::string, uintptr_t>;
 
