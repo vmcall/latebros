@@ -2,7 +2,12 @@
 #include "ntdll.hpp"
 #include "rng.hpp"
 
-using hook_container = std::vector<std::tuple<std::string, std::string, const char*>>;
+struct littlehook
+{
+	std::string module_name;
+	std::string function_name;
+	std::string hook_name;
+};
 
 int main()
 {
@@ -14,9 +19,9 @@ int main()
 
 	// SETUP HOOK CONTAINER
 	// FORMAT: MODULE NAME, FUNCTION NAME, EXPORT NAME
-	hook_container container =
+	std::vector<littlehook> container =
 	{
-		// HOOK AS LOW AS POSSIBLE TO PREVENT CIRCUMVENTIONS
+		// HOOK *ONLY* SYSCALLS
 		{ "ntdll.dll", "NtOpenProcess",				"ntop" },
 		{ "ntdll.dll", "NtQuerySystemInformation",	"qsi" },
 		{ "ntdll.dll", "NtCreateFile",				"ntcr"},
@@ -48,12 +53,12 @@ int main()
 			auto littlebro = injection::manualmap(proc).inject(littlebro_buffer);
 
 			// HOOK FUNCTIONS
-			for (const auto [module_name, function_name, export_name] : container)
-				proc.detour_function(module_name, function_name, littlebro, export_name);
+			for (const auto& hook_data : container)
+				proc.detour_function(hook_data.module_name, hook_data.function_name, littlebro, hook_data.hook_name.c_str());
 
 			// FILL HEADER SECTION WITH PSEUDO-RANDOM DATA WITH HIGH ENTROPY
 			auto junk_buffer = std::vector<std::uint8_t>(0x1000);
-			std::for_each(junk_buffer.begin(), junk_buffer.end(), [](auto& n) { n = rng::get_int<uint16_t>(0x00, 0xFF); });
+			std::generate(junk_buffer.begin(), junk_buffer.end(), [] { return rng::get_int<uint16_t>(0x00, 0xFF); }); 
 			proc.write_raw_memory(junk_buffer.data(), 0x1000, littlebro);
 		}
 	}
