@@ -28,6 +28,7 @@
 #include <locale>
 #include <codecvt>
 #include <variant>
+#include <random>
 
 #include "logger.hpp"
 #include "loadlibrary.hpp"

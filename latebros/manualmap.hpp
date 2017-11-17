@@ -38,9 +38,8 @@ namespace injection
 
 	private:
 		bool map_image(map_ctx& ctx);
-		uintptr_t find_or_map_dependecy(const std::string& image_name);
+		uintptr_t find_or_map_dependency(const std::string& image_name);
 		void write_headers(map_ctx& ctx);
-		bool call_entrypoint(map_ctx& ctx);
 		void write_image_sections(map_ctx& ctx);
 		void relocate_image_by_delta(map_ctx& ctx);
 		void fix_import_table(map_ctx& ctx);

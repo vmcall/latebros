@@ -8,14 +8,10 @@ uintptr_t injection::manualmap::inject(const std::vector<uint8_t>& buffer)
 	this->linked_modules = this->process.get_modules();
 
 	// INITIALISE CONTEXT
-	map_ctx ctx("Main Image", buffer);
+	map_ctx ctx("littlebro", buffer);
 
-	// MAP MAIN IMAGE AND ALL DEPENDENCIES
+	// MAP IMAGE AND ALL DEPENDENCIES
 	if (!map_image(ctx))
-		return 0;
-
-	// CALL DEPENCY ENTRYPOINTS AND MAIN IMAGE ENTRYPOINTS
-	if (!call_entrypoint(ctx))
 		return 0;
 
 	return ctx.remote_image;
@@ -54,7 +50,7 @@ bool injection::manualmap::map_image(map_ctx& ctx)
 	return true;
 }
 
-uintptr_t injection::manualmap::find_or_map_dependecy(const std::string& image_name)
+uintptr_t injection::manualmap::find_or_map_dependency(const std::string& image_name)
 {
 	// HAVE WE MAPPED THIS MODULE ALREADY?
 	for (auto module : this->mapped_modules)
@@ -84,52 +80,6 @@ void injection::manualmap::write_image_sections(map_ctx& ctx)
 		memcpy(reinterpret_cast<void*>(ctx.local_image + section.VirtualAddress), ctx.get_pe_buffer() + section.PointerToRawData, section.SizeOfRawData);
 }
 
-bool injection::manualmap::call_entrypoint(map_ctx& ctx)
-{
-	// dllmain_call_x64.asm
-	uint8_t shellcode[] = { 0x48, 0x83, 0xEC, 0x28, 0x48, 0xB9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0xC2, 0x01, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC0, 0x48, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xD0, 0x48, 0x83, 0xC4, 0x28, 0xC3 };
-
-	*PPTR(shellcode + 0x6) = ctx.remote_image;
-	*PPTR(shellcode + 0x1A) = ctx.remote_image + ctx.pe.get_optional_header().AddressOfEntryPoint;
-
-	auto remote_buffer = this->process.raw_allocate(sizeof(shellcode));
-
-	if (!remote_buffer)
-	{
-		logger::log_error("Failed to allocate shellcode");
-		return false;
-	}
-
-	auto success = true;
-
-	do
-	{
-		if (!this->process.write_raw_memory(shellcode, sizeof(shellcode), remote_buffer))
-		{
-			logger::log_error("Failed to write shellcode");
-			success = false;
-			break;
-		}
-
-		auto thread_handle = safe_handle(this->process.create_thread(remote_buffer, NULL));
-
-		if (!thread_handle)
-		{
-			logger::log_error("Failed to create shellcode thread");
-			success = false;
-			break;
-		}
-
-		WaitForSingleObject(thread_handle.get_handle(), INFINITE);
-	} while (false);
-
-
-	// FREE SHELLCODE
-	this->process.free_memory(remote_buffer);
-
-	return success;
-}
-
 void injection::manualmap::relocate_image_by_delta(map_ctx& ctx)
 {
 	auto delta = ctx.remote_image - ctx.pe.get_image_base();
@@ -151,7 +101,7 @@ void injection::manualmap::fix_import_table(map_ctx& ctx)
 		if (api_schema.query(wide_module_name))
 			module_name = converter.to_bytes(wide_module_name);
 
-		auto module_handle = find_or_map_dependecy(module_name);
+		auto module_handle = find_or_map_dependency(module_name);
 		if (!module_handle)
 			logger::log_error("Failed to map dependency");
 
