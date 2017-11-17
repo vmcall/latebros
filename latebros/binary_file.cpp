@@ -8,10 +8,10 @@ std::vector<uint8_t> binary_file::read_file(const std::string& file_path)
 
 	auto buffer = std::vector<uint8_t>();
 	stream.seekg(0, std::ios::end);
-	buffer.reserve(stream.tellg());
+	buffer.resize(stream.tellg());
 	stream.seekg(0, std::ios::beg);
 
-	std::copy(std::istream_iterator<uint8_t>{stream}, {}, std::back_inserter(buffer));
+	stream.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
 
 	return buffer;
 }
