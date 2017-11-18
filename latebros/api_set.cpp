@@ -38,12 +38,12 @@ api_set::api_set()
 bool api_set::query(std::wstring& name)
 {
 	// SEARCH FOR ANY ENTRIES OF OUR PROXY DLL
-	auto iter = std::find_if(this->schema.begin(), this->schema.end(), [name](const map_api_schema::value_type& val)
+	auto iter = std::find_if(this->schema.begin(), this->schema.end(), [&](const map_api_schema::value_type& val)
 	{
 		return name.find(val.first) != name.npos;
 	});
 
-	if (iter != this->schema.end()) // FOUND
+	if (iter != this->schema.end() && !iter->second.empty()) // FOUND
 	{
 		name = (iter->second.front() != name ? iter->second.front() : iter->second.back());
 		return true;

@@ -62,7 +62,7 @@ uintptr_t injection::manualmap::find_or_map_dependency(const std::string& image_
 		return this->linked_modules.at(image_name);
 
 	// TODO: PROPER FILE SEARCHING
-	auto ctx = map_ctx(image_name, binary_file::read_file("C:\\Windows\\System32\\" + image_name));
+	auto ctx = map_ctx(image_name, read_binary_file("C:\\Windows\\System32\\" + image_name));
 
 	if (map_image(ctx))
 		return ctx.remote_image;
