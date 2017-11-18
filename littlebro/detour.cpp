@@ -1,9 +1,9 @@
 #include "stdafx.h"
 #include "detour.hpp"
 
-std::array<unsigned char, 0xF> detour::generate_shellcode(uintptr_t hook_pointer)
+std::array<uint8_t, 0xF> detour::generate_shellcode(uintptr_t hook_pointer)
 {
-	std::array<unsigned char, 0xF> hook_bytes = {
+	std::array<uint8_t, 0xF> hook_bytes = {
 		0xFF, 0x35, 0x01, 0x00, 0x00, 0x00,							// PUSH [RIP+1]
 		0xC3,														// RET
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };			// HOOK POINTER
