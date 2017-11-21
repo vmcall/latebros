@@ -15,7 +15,7 @@ int main()
 	ntdll::initialise();
 
 	// READ LITTLEBRO FROM DISK FOR INJECTION
-	const auto littlebro_buffer = read_binary_file("littlebro.dll");
+	const auto littlebro_buffer = file::read_binary_file("littlebro.dll");
 
 	// SETUP HOOK CONTAINER
 	// FORMAT: MODULE NAME, FUNCTION NAME, EXPORT NAME

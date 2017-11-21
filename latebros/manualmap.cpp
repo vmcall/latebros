@@ -53,7 +53,7 @@ bool injection::manualmap::map_image(map_ctx& ctx)
 uintptr_t injection::manualmap::find_or_map_dependency(const std::string& image_name)
 {
 	// HAVE WE MAPPED THIS MODULE ALREADY?
-	for (auto module : this->mapped_modules)
+	for (const auto& module : this->mapped_modules)
 		if (module.image_name == image_name)
 			return module.remote_image;
 
@@ -62,7 +62,7 @@ uintptr_t injection::manualmap::find_or_map_dependency(const std::string& image_
 		return this->linked_modules.at(image_name);
 
 	// TODO: PROPER FILE SEARCHING
-	auto ctx = map_ctx(image_name, read_binary_file("C:\\Windows\\System32\\" + image_name));
+	auto ctx = map_ctx(image_name, file::read_binary_file("C:\\Windows\\System32\\" + image_name));
 
 	if (map_image(ctx))
 		return ctx.remote_image;
@@ -76,7 +76,7 @@ void injection::manualmap::write_headers(map_ctx& ctx)
 }
 void injection::manualmap::write_image_sections(map_ctx& ctx)
 {
-	for (auto section : ctx.pe.get_sections())
+	for (const auto& section : ctx.pe.get_sections())
 		memcpy(reinterpret_cast<void*>(ctx.local_image + section.VirtualAddress), ctx.get_pe_buffer() + section.PointerToRawData, section.SizeOfRawData);
 }
 
@@ -95,7 +95,7 @@ void injection::manualmap::fix_import_table(map_ctx& ctx)
 
 	for (auto&[tmp_name, functions] : ctx.pe.get_imports(ctx.local_image))
 	{
-		auto module_name = tmp_name; // COMPILER COMPLAINED ABOUT tmp_name BEING CONST??
+		auto module_name = tmp_name;
 
 		std::wstring wide_module_name = converter.from_bytes(module_name.c_str());
 		if (api_schema.query(wide_module_name))

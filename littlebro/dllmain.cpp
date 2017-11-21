@@ -68,7 +68,7 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 	// PREVENT BRUTEFORCE
 	if (system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(0x58)/*SystemProcessIdInformation*/)
 	{
-    const auto process_id = *static_cast<uint64_t*>(system_information);
+		const auto process_id = *static_cast<uint64_t*>(system_information);
 
 		// REMOVE HOOKS IN CASE PROCESS ID IS PROTECTED
 		const auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtOpenProcess"));
