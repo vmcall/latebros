@@ -10,7 +10,9 @@
 #include <unordered_map>
 #include <vector>
 #include <array>
+#include <fstream>
 
 #define STATUS_NOT_FOUND                 ((NTSTATUS)0xC0000225L)
 #define STATUS_SUCCESS                   ((NTSTATUS)0x00000000L)    // ntsubauth
 #define STATUS_INVALID_CID               ((NTSTATUS)0xC000000BL)
+#define STATUS_OBJECT_NAME_NOT_FOUND     ((NTSTATUS)0xC0000034L)
