@@ -19,7 +19,7 @@ struct API_SET_VALUE_ARRAY
 	ULONG data_offset;
 	ULONG count;
 
-	inline API_SET_VALUE_ENTRY* entry(void* api_set, SIZE_T index)
+	inline API_SET_VALUE_ENTRY* entry(void* api_set, SIZE_T index) const
 	{
 		return reinterpret_cast<API_SET_VALUE_ENTRY*>(reinterpret_cast<uintptr_t>(api_set) + data_offset + index * sizeof(API_SET_VALUE_ENTRY));
 	}
@@ -51,10 +51,13 @@ struct API_SET_NAMESPACE_ARRAY
 		return reinterpret_cast<API_SET_VALUE_ARRAY*>(reinterpret_cast<uintptr_t>(this) + start + sizeof(API_SET_VALUE_ARRAY) * entry_pointer->size);
 	}
 
-	inline void read_name(API_SET_NAMESPACE_ENTRY* entry_pointer, wchar_t* output)
+	std::wstring get_name(API_SET_NAMESPACE_ENTRY* entry_pointer)
 	{
-		auto array_pointer = get_host(entry_pointer);
-		memcpy(output, reinterpret_cast<char*>(this) + array_pointer->name_offset, array_pointer->name_length);
+		const auto array_pointer = get_host(entry_pointer);
+		const auto name_ptr      = reinterpret_cast<char*>(this) + array_pointer->name_offset;
+		const auto name_len      = array_pointer->name_length / sizeof(wchar_t);
+
+		return std::wstring(reinterpret_cast<wchar_t*>(name_ptr), name_len);
 	}
 };
 
