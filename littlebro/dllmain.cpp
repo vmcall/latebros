@@ -1,7 +1,7 @@
 ﻿#include "stdafx.h"
 #include "detour.hpp"
 
-constexpr static auto ROOTKIT_PREFIX L"LB_"
+constexpr static auto ROOTKIT_PREFIX = L"LB_";
 
 /*
  * Function: ntdll!NtOpenProcess
