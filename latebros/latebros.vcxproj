@@ -165,7 +165,6 @@
     <ClCompile Include="ntdll.cpp" />
     <ClCompile Include="portable_executable.cpp" />
     <ClCompile Include="process.cpp" />
-    <ClCompile Include="rng.cpp" />
     <ClCompile Include="safe_handle.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

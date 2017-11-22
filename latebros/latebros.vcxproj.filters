@@ -116,8 +116,5 @@
     <ClCompile Include="detour.cpp">
       <Filter>Source Files\Helpers</Filter>
     </ClCompile>
-    <ClCompile Include="rng.cpp">
-      <Filter>Source Files\Helpers</Filter>
-    </ClCompile>
   </ItemGroup>
 </Project>
