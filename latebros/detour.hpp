@@ -1,8 +1,8 @@
 #pragma once
 #include "stdafx.h"
 
-class detour
+class detour 
 {
-public:
-	static std::vector<char> generate_shellcode(uintptr_t hook_pointer);
-};
+public:	
+	static std::array<uint8_t, 0xF> generate_shellcode(uintptr_t hook_pointer);
+}

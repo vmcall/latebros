@@ -27,7 +27,7 @@ public:
 	uintptr_t raw_allocate(const SIZE_T virtual_size, const uintptr_t address = 0);
 	bool free_memory(const uintptr_t address);
 	bool read_raw_memory(void* buffer, const uintptr_t address, const SIZE_T size);
-	bool write_raw_memory(void* buffer, const SIZE_T size, const uintptr_t address);
+	bool write_raw_memory(const void* buffer, const SIZE_T size, const uintptr_t address);
 	bool virtual_protect(const uintptr_t address, uint32_t protect, uint32_t* old_protect);
 
 	uintptr_t map(memory_section& section);

@@ -4,7 +4,7 @@ portable_executable::portable_executable(std::vector<uint8_t>& new_buffer) : buf
 {
 	// READ HEADERS
 
-	if (this->buffer.data())
+	if (!this->buffer.empty())
 	{
 		this->dos_header = reinterpret_cast<IMAGE_DOS_HEADER*>(this->buffer.data());
 		this->nt_headers = reinterpret_cast<IMAGE_NT_HEADERS64*>(this->buffer.data() + this->dos_header->e_lfanew);
@@ -53,6 +53,7 @@ std::vector<uint8_t>& portable_executable::get_buffer()
 
 void portable_executable::parse_sections()
 {
+	this->sections.reserve(this->file_header.NumberOfSections);
 	auto section_pointer = reinterpret_cast<IMAGE_SECTION_HEADER*>(this->nt_headers + 1);
 	for (auto index = 0; index < this->file_header.NumberOfSections; index++)
 		this->sections.push_back(section_pointer[index]);

@@ -7,17 +7,8 @@ struct map_ctx
 {
 	std::string image_name;
 	portable_executable pe;
-
-	union { // UB
-		uintptr_t local_image;
-		void* local_image_void;
-
-	};
-	union { // UB
-		uintptr_t remote_image;
-		void* remote_image_void;
-	};
-
+	uintptr_t local_image;
+	uintptr_t remote_image;
 	uint8_t* get_pe_buffer();
 
 	map_ctx() : pe(std::vector<uint8_t>()), remote_image(0) {}
