@@ -6,7 +6,7 @@ struct reloc_item
 	WORD offset : 12;
 	WORD type : 4;
 
-	WORD get_offset()
+	WORD get_offset() const noexcept
 	{
 		return offset % 4096;
 	}

@@ -98,9 +98,6 @@
     <ClCompile Include="memory_section.cpp">
       <Filter>Source Files\Helpers</Filter>
     </ClCompile>
-    <ClCompile Include="safe_handle.cpp">
-      <Filter>Source Files\Helpers</Filter>
-    </ClCompile>
     <ClCompile Include="ntdll.cpp">
       <Filter>Source Files\Helpers</Filter>
     </ClCompile>

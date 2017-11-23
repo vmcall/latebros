@@ -72,7 +72,7 @@ uintptr_t injection::manualmap::find_or_map_dependency(const std::string& image_
 
 void injection::manualmap::write_headers(map_ctx& ctx)
 {
-	memcpy(ctx.local_image_void, ctx.get_pe_buffer(), ctx.pe.get_optional_header().SizeOfHeaders);
+	memcpy(reinterpret_cast<void*>(ctx.local_image), ctx.get_pe_buffer(), ctx.pe.get_optional_header().SizeOfHeaders);
 }
 void injection::manualmap::write_image_sections(map_ctx& ctx)
 {
@@ -93,7 +93,7 @@ void injection::manualmap::fix_import_table(map_ctx& ctx)
 	wstring_converter converter;
 	api_set api_schema;
 
-	for (auto&[tmp_name, functions] : ctx.pe.get_imports(ctx.local_image))
+	for (const auto&[tmp_name, functions] : ctx.pe.get_imports(ctx.local_image))
 	{
 		auto module_name = tmp_name; // COMPILER COMPLAINED ABOUT tmp_name BEING CONST??
 
