@@ -322,23 +322,24 @@ extern "C" NTSTATUS __declspec(dllexport) NTAPI ntevk(HANDLE key_handle, ULONG i
 	detour::remove_detour(function_pointer, ntevk_og, sizeof(ntevk_og));
 
 	// WE NEED TO SAVE INDEXES NOT TO DISPLAY SAME KEY TWICE AFTER REPLACING THE HIDDEN ONES
-	thread_local int last_replaced = -1;
+	thread_local int last_replaced  = -1;
 	thread_local HANDLE last_handle = key_handle;
 
 	// WE ARE NOT ITERATING OVER A NEW KEYS LIST
-	if(last_handle != key_handle) {
-		last_handle  = key_handle;
+	if (last_handle != key_handle) 
+	{
+		last_handle   = key_handle;
 		last_replaced = -1;
 	}
 	
 	// UPDATE THE INDEX TO BE AFTER THE VALUE WE REPLACED HIDDEN KEYS WITH
-	if(index < last_replaced)
+	if (index <= last_replaced)
 	{
 		index = last_replaced + 1;
 		++last_replaced;
 	}
 
-	NTSTATUS result;
+	NTSTATUS     result;
 	std::wstring name;
 	while (true)
 	{
