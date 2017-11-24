@@ -87,7 +87,7 @@ void injection::manualmap::relocate_image_by_delta(map_ctx& ctx)
 	auto delta = ctx.remote_image - ctx.pe.get_image_base();
 
 	for (auto&[entry, item] : ctx.pe.get_relocations(ctx.local_image))
-		*PPTR(ctx.local_image + entry.page_rva + item.get_offset()) += delta;
+		*reinterpret_cast<uintptr_t*>(ctx.local_image + entry.page_rva + item.get_offset()) += delta;
 }
 
 void injection::manualmap::fix_import_table(map_ctx& ctx)
@@ -109,7 +109,7 @@ void injection::manualmap::fix_import_table(map_ctx& ctx)
 
 		for (const auto& fn : functions)
 		{
-			*PPTR(ctx.local_image + fn.function_rva) = fn.ordinal > 0 ?
+			*reinterpret_cast<uintptr_t*>(ctx.local_image + fn.function_rva) = fn.ordinal > 0 ?
 				this->process.get_module_export(module_handle, reinterpret_cast<const char*>(fn.ordinal)) :	// IMPORT BY ORDINAL
 				this->process.get_module_export(module_handle, fn.name.c_str());							// IMPORT BY NAME
 		}

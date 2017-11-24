@@ -5,9 +5,6 @@
 
 #pragma once
 
-#define PTR(t) reinterpret_cast<uintptr_t>(t)
-#define PPTR(t) reinterpret_cast<uintptr_t*>(t)
-
 #include "targetver.h"
 
 // PLATFORM HEADERS ----------------------------------------------------------------------
