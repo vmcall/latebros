@@ -5,7 +5,7 @@ api_set::api_set()
 {
 	const auto peb = reinterpret_cast<uintptr_t>(NtCurrentTeb()->ProcessEnvironmentBlock);
 
-	auto api_set = *reinterpret_cast<API_SET_NAMESPACE_ARRAY**>(peb + 0x68);
+	const auto api_set = *reinterpret_cast<API_SET_NAMESPACE_ARRAY**>(peb + 0x68);
 
 	for (ULONG entry_index = 0; entry_index < api_set->count; ++entry_index)
 	{
@@ -35,10 +35,10 @@ api_set::api_set()
 	}
 }
 
-bool api_set::query(std::wstring& name)
+bool api_set::query(std::wstring& name) const
 {
 	// SEARCH FOR ANY ENTRIES OF OUR PROXY DLL
-	auto iter = std::find_if(this->schema.begin(), this->schema.end(), [&](const map_api_schema::value_type& val)
+	const auto iter = std::find_if(this->schema.begin(), this->schema.end(), [&](const map_api_schema::value_type& val)
 	{
 		return name.find(val.first) != name.npos;
 	});
