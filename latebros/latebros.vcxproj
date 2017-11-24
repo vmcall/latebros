@@ -142,7 +142,6 @@
   <ItemGroup>
     <ClInclude Include="api_set.hpp" />
     <ClInclude Include="binary_file.hpp" />
-    <ClInclude Include="detour.hpp" />
     <ClInclude Include="loadlibrary.hpp" />
     <ClInclude Include="logger.hpp" />
     <ClInclude Include="manualmap.hpp" />
@@ -150,6 +149,7 @@
     <ClInclude Include="ntdll.hpp" />
     <ClInclude Include="portable_executable.hpp" />
     <ClInclude Include="process.hpp" />
+    <ClInclude Include="remote_detours.hpp" />
     <ClInclude Include="rng.hpp" />
     <ClInclude Include="safe_handle.hpp" />
     <ClInclude Include="stdafx.h" />
@@ -158,13 +158,13 @@
   <ItemGroup>
     <ClCompile Include="api_set.cpp" />
     <ClCompile Include="binary_file.cpp" />
-    <ClCompile Include="detour.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="manualmap.cpp" />
     <ClCompile Include="memory_section.cpp" />
     <ClCompile Include="ntdll.cpp" />
     <ClCompile Include="portable_executable.cpp" />
     <ClCompile Include="process.cpp" />
+    <ClCompile Include="remote_detours.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>

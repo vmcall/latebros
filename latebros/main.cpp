@@ -3,6 +3,7 @@
 #include "rng.hpp"
 #include "binary_file.hpp"
 #include "manualmap.hpp"
+#include "remote_detours.hpp"
 
 struct littlehook
 {
@@ -55,10 +56,10 @@ int main()
 			}
 
 			const auto littlebro = injection::manualmap(proc).inject(littlebro_buffer);
-
+			auto hooks = remote_detours{ proc, littlebro };
 			// HOOK FUNCTIONS
 			for (const auto& hook_data : container)
-				proc.detour_function(hook_data.module_name, hook_data.function_name, littlebro, hook_data.hook_name.c_str());
+				hooks.hook_function({hook_data.module_name, hook_data.function_name}, hook_data.hook_name);
 
 			// FILL HEADER SECTION WITH PSEUDO-RANDOM DATA
 			auto junk_buffer = std::vector<std::uint8_t>(0x1000);

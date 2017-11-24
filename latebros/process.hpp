@@ -2,8 +2,6 @@
 #include "stdafx.h"
 #include "memory_section.hpp"
 
-using hook_map = std::unordered_map<uintptr_t, uintptr_t>;
-using detour_map = std::unordered_map<uintptr_t, std::vector<std::byte>>;
 using wstring_converter = std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>;
 
 class process
@@ -24,9 +22,9 @@ public:
 	MEMORY_BASIC_INFORMATION virtual_query(const uintptr_t address);
 	uintptr_t raw_allocate(const SIZE_T virtual_size, const uintptr_t address = 0);
 	bool free_memory(const uintptr_t address);
-	bool read_raw_memory(void* buffer, const uintptr_t address, const SIZE_T size);
-	bool write_raw_memory(const void* buffer, const SIZE_T size, const uintptr_t address);
-	bool virtual_protect(const uintptr_t address, uint32_t protect, uint32_t* old_protect);
+	bool read_raw_memory(void* buffer, const uintptr_t address, const SIZE_T size) const;
+	bool write_raw_memory(const void* buffer, const SIZE_T size, const uintptr_t address) const;
+	bool virtual_protect(const uintptr_t address, uint32_t protect, uint32_t* old_protect) const;
 
 	uintptr_t map(memory_section& section);
 
@@ -45,36 +43,32 @@ public:
 	}
 
 	template<class T>
-	inline bool read_memory(T* buffer, const uintptr_t address)
+	inline bool read_memory(T* buffer, const uintptr_t address) const
 	{
 		return read_raw_memory(buffer, address, sizeof(T));
 	}
 
 	template<class T>
-	inline bool write_memory(const T& buffer, const uintptr_t address)
+	inline bool write_memory(const T& buffer, const uintptr_t address) const
 	{
 		uint32_t old_protect;
-		this->virtual_protect(address, PAGE_EXECUTE_READWRITE, &old_protect);
-		auto result = write_raw_memory(reinterpret_cast<unsigned char*>(const_cast<T*>(&buffer)), sizeof(T), address);
+		auto result = this->virtual_protect(address, PAGE_EXECUTE_READWRITE, &old_protect);
+		if(result)
+			return false;
+		
+		result = write_raw_memory(reinterpret_cast<unsigned char*>(const_cast<T*>(&buffer)), sizeof(T), address);
 		this->virtual_protect(old_protect, PAGE_EXECUTE_READWRITE, &old_protect);
 
 		return result;
 	}
 #pragma endregion
 
-#pragma region Hooks
-	bool detour_function(const std::string& module_name, const std::string& function_name, const uintptr_t littlebro, const std::string& hook_name);
-	bool reset_detour(const std::string& module_name, const std::string& function_name, const uintptr_t littlebro, const std::string& hook_name);
-	bool detour_import_entry(const std::string& module_name, const std::string& function_name, const uintptr_t hook_pointer);
-	bool reset_import_entry(const std::string& module_name, const std::string& function_name, const uintptr_t hook_pointer);
-#pragma endregion
-
 #pragma region Information
-	std::unordered_map<std::string, uintptr_t> get_modules();
-	uintptr_t get_base_address();
-	std::string get_name();
-	uintptr_t get_import(const std::string& module_name, const std::string& function_name);
-	uintptr_t get_module_export(uintptr_t module_handle, const char* function_ordinal);
+	std::unordered_map<std::string, uintptr_t> get_modules() const;
+	uintptr_t get_base_address() const;
+	std::string get_name() const;
+	uintptr_t get_import(const std::string& module_name, const std::string& function_name) const;
+	uintptr_t get_module_export(uintptr_t module_handle, const char* function_ordinal) const;
 #pragma endregion
 
 #pragma region Thread
@@ -83,6 +77,4 @@ public:
 
 private:
 	safe_handle handle;
-	hook_map import_entry_detours;
-	detour_map detours;
 };

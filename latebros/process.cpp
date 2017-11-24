@@ -2,7 +2,6 @@
 #include "process.hpp"
 #include "ntdll.hpp"
 #include "api_set.hpp"
-#include "detour.hpp"
 
 process::process(uint32_t id, DWORD desired_access)
 	: handle(OpenProcess(desired_access, false, id))
@@ -88,17 +87,17 @@ bool process::free_memory(const uintptr_t address)
 }
 
 
-bool process::read_raw_memory(void* buffer, const uintptr_t address, const SIZE_T size)
+bool process::read_raw_memory(void* buffer, const uintptr_t address, const SIZE_T size) const
 {
 	return ReadProcessMemory(this->handle.get(), reinterpret_cast<LPCVOID>(address), buffer, size, nullptr);
 }
 
-bool process::write_raw_memory(const void* buffer, const SIZE_T size, const uintptr_t address)
+bool process::write_raw_memory(const void* buffer, const SIZE_T size, const uintptr_t address) const
 {
 	return WriteProcessMemory(this->handle.get(), reinterpret_cast<LPVOID>(address), buffer, size, nullptr);
 }
 
-bool process::virtual_protect(const uintptr_t address, uint32_t protect, uint32_t* old_protect)
+bool process::virtual_protect(const uintptr_t address, uint32_t protect, uint32_t* old_protect) const
 {
 	return VirtualProtectEx(this->handle.get(), reinterpret_cast<LPVOID>(address), 0x1000, protect, reinterpret_cast<PDWORD>(old_protect));
 }
@@ -118,7 +117,7 @@ uintptr_t process::map(memory_section& section)
 	return reinterpret_cast<uintptr_t>(base_address);
 }
 
-std::unordered_map<std::string, uintptr_t> process::get_modules()
+std::unordered_map<std::string, uintptr_t> process::get_modules() const
 {
 	auto result = std::unordered_map<std::string, uintptr_t>();
 
@@ -139,17 +138,15 @@ std::unordered_map<std::string, uintptr_t> process::get_modules()
 		}
 	}
 
-
-
 	return result;
 }
 
-uintptr_t process::get_base_address()
+uintptr_t process::get_base_address() const
 {
 	std::string process_name = this->get_name();
 	std::transform(process_name.begin(), process_name.end(), process_name.begin(), ::tolower);
 
-	for (auto&[name, module_handle] : this->get_modules())
+	for (const auto&[name, module_handle] : this->get_modules())
 	{
 		if (name == process_name)
 			return module_handle;
@@ -158,7 +155,7 @@ uintptr_t process::get_base_address()
 	return 0;
 }
 
-std::string process::get_name()
+std::string process::get_name() const
 {
 	char buffer[MAX_PATH];
 	GetModuleBaseNameA(handle.get(), nullptr, buffer, MAX_PATH);
@@ -170,7 +167,7 @@ std::string process::get_name()
 	return name;
 }
 
-uintptr_t process::get_import(const std::string& module_name, const std::string& function_name)
+uintptr_t process::get_import(const std::string& module_name, const std::string& function_name) const
 {
 	auto image_base = this->get_base_address();
 	IMAGE_DOS_HEADER dos_header;
@@ -223,7 +220,7 @@ uintptr_t process::get_import(const std::string& module_name, const std::string&
 }
 
 // thx blackbone :)
-uintptr_t process::get_module_export(uintptr_t module_handle, const char* function_ordinal)
+uintptr_t process::get_module_export(uintptr_t module_handle, const char* function_ordinal) const
 {
 	IMAGE_DOS_HEADER dos_header;
 	IMAGE_NT_HEADERS64 nt_header;
@@ -316,88 +313,6 @@ uintptr_t process::get_module_export(uintptr_t module_handle, const char* functi
 	logger::log_formatted("Exported function", function_ordinal);
 
 	return 0;
-}
-
-bool process::detour_import_entry(const std::string& module_name, const std::string& function_name, const uintptr_t hook_pointer)
-{
-	auto entry = this->get_import(module_name, function_name);
-
-	if (!entry)
-		return false;
-
-	uintptr_t function_address;
-	this->read_memory(&function_address, entry);
-
-	this->import_entry_detours.emplace(hook_pointer, function_address);
-
-	if (!this->write_memory(hook_pointer, entry))
-	{
-		logger::log_error("Failed to write IAT entry");
-		return false;
-	}
-
-	logger::log_formatted("Hooked", function_name);
-	return true;
-}
-
-bool process::reset_import_entry(const std::string& module_name, const std::string& function_name, const uintptr_t hook_pointer)
-{
-	auto original_function = this->import_entry_detours.at(hook_pointer);
-
-	if (!original_function)
-		return false;
-
-	auto entry = this->get_import(module_name, function_name);
-
-	if (!entry || !this->write_memory(original_function, entry))
-		return false;
-
-	return true;
-}
-
-bool process::detour_function(const std::string& module_name, const std::string& function_name, const uintptr_t littlebro, const std::string& hook_name)
-{
-	// GET EXPORTED HOOK POINTER
-	auto module_handle = reinterpret_cast<uintptr_t>(GetModuleHandleA(module_name.c_str())); // TODO: USE this->modules()
-	auto function_address = this->get_module_export(module_handle, function_name.c_str());;
-
-	if (!function_address)
-	{
-		logger::log_error("Failed to get module export");
-		return false;
-	}
-
-	// READ OLD BYTES
-	char original_bytes[0xF] = {};
-	this->read_raw_memory(original_bytes, function_address, sizeof(original_bytes));
-
-	// WRITE OLD BYTES TO EXPORTED DATA CONTAINER
-	auto exported_container = this->get_module_export(littlebro, (hook_name + "_og").c_str());
-	this->write_raw_memory(original_bytes, sizeof(original_bytes), exported_container);
-
-	// DETOUR FUNCTION
-	auto hook_pointer = this->get_module_export(littlebro, hook_name.c_str());
-	auto shellcode = detour::generate_shellcode(hook_pointer);
-	this->write_raw_memory(shellcode.data(), shellcode.size(), function_address);
-
-	logger::log_formatted("Detoured", function_name);
-	return true;
-}
-
-bool process::reset_detour(const std::string& module_name, const std::string& function_name, const uintptr_t littlebro, const std::string& hook_name)
-{
-	auto entry = this->get_import(module_name, function_name);
-	if (auto function = this->detours.find(entry); function != this->detours.end())
-	{
-		auto original_bytes = function->second;
-
-		// TODO
-
-		return true;
-	}
-
-
-	return false;
 }
 
 safe_handle process::create_thread(const uintptr_t address, const uintptr_t argument) const
