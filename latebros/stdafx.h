@@ -1,13 +1,9 @@
-// stdafx.h : include file for standard system include files,
-// or project specific include files that are used frequently, but
-// are changed infrequently
-//
-
 #pragma once
 
-#include "targetver.h"
-
 // PLATFORM HEADERS ----------------------------------------------------------------------
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <SDKDDKVer.h>
 #include <Windows.h>
 #include <WInternl.h>
 #include <Psapi.h>
@@ -29,12 +25,10 @@
 #include <locale>
 #include <random>
 
-// C-ISH HEADERS
+// C-ISH
 #include <cstdio>
 #include <cstdint>
 
 // PROJECT HEADERS -----------------------------------------------------------------------
 #include "safe_handle.hpp"
 #include "logger.hpp"
-
-// TODO: reference additional headers your program requires here

@@ -1,18 +1,17 @@
 #pragma once
+
+// PLATFORM HEADERS ----------------------------------------------------------------------
 #define WIN32_LEAN_AND_MEAN
-#pragma comment(lib,"ntdll.lib")
-#include <windows.h>
+#define NOMINMAX
+#include <SDKDDKVer.h>
+#include <Windows.h>
 #include <WInternl.h>
 #include <TlHelp32.h>
 #include <Psapi.h>
-#include <string>
-#include <unordered_set>
-#include <unordered_map>
-#include <vector>
-#include <array>
-#include <fstream>
 
-#define STATUS_NOT_FOUND                 ((NTSTATUS)0xC0000225L)
-#define STATUS_SUCCESS                   ((NTSTATUS)0x00000000L)    // ntsubauth
-#define STATUS_INVALID_CID               ((NTSTATUS)0xC000000BL)
-#define STATUS_OBJECT_NAME_NOT_FOUND     ((NTSTATUS)0xC0000034L)
+// STL HEADERS ---------------------------------------------------------------------------
+#include <string_view>
+#include <array>
+
+// LIBRARIES -----------------------------------------------------------------------------
+#pragma comment(lib, "ntdll.lib")
