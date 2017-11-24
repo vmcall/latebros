@@ -5,16 +5,13 @@
 #include "detour.hpp"
 
 process::process(uint32_t id, DWORD desired_access)
+	: handle(OpenProcess(desired_access, false, id))
 {
-	auto opened_handle = OpenProcess(desired_access, false, id);
-
-	//if (!opened_handle)
-	//{
-	//	logger::log_error("Failed to open handle to process");
-	//	logger::log_formatted("Process ID", id, true);
-	//}
-
-	this->handle = safe_handle(opened_handle);
+	/*if(!handle)
+	{
+		logger::log_error("Failed to open handle to process");
+		logger::log_formatted("Process ID", id, true);
+	}*/
 }
 
 process::operator bool()
@@ -24,7 +21,7 @@ process::operator bool()
 
 process process::current_process()
 {
-	return process(reinterpret_cast<HANDLE>(-1));
+	return process(reinterpret_cast<HANDLE>(GetCurrentProcess()));
 }
 
 std::vector<uint32_t> process::get_all_from_name(const std::string& process_name)
@@ -403,7 +400,7 @@ bool process::reset_detour(const std::string& module_name, const std::string& fu
 	return false;
 }
 
-HANDLE process::create_thread(const uintptr_t address, const uintptr_t argument)
+safe_handle process::create_thread(const uintptr_t address, const uintptr_t argument) const
 {
-	return CreateRemoteThread(this->handle.get(), nullptr, 0, reinterpret_cast<LPTHREAD_START_ROUTINE>(address), reinterpret_cast<LPVOID>(argument), 0, nullptr);
+	return safe_handle{ CreateRemoteThread(this->handle.get(), nullptr, 0, reinterpret_cast<LPTHREAD_START_ROUTINE>(address), reinterpret_cast<LPVOID>(argument), 0, nullptr) };
 }

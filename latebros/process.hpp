@@ -11,7 +11,6 @@ class process
 public:
 	process(uint32_t id, DWORD desired_access);
 	process(HANDLE handle) : handle(handle) {}
-	process() : handle() { }
 
 	explicit operator bool();
 
@@ -79,7 +78,7 @@ public:
 #pragma endregion
 
 #pragma region Thread
-	HANDLE create_thread(const uintptr_t address, const uintptr_t argument = 0);
+	safe_handle create_thread(const uintptr_t address, const uintptr_t argument = 0) const;
 #pragma endregion
 
 private:
@@ -87,6 +86,3 @@ private:
 	hook_map import_entry_detours;
 	detour_map detours;
 };
-
-
-
