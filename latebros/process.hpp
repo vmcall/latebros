@@ -1,6 +1,5 @@
 #pragma once
 #include "stdafx.h"
-#include "safe_handle.hpp"
 #include "memory_section.hpp"
 
 using hook_map = std::unordered_map<uintptr_t, uintptr_t>;

@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "ntdll.hpp"
 #include "rng.hpp"
+#include "binary_file.hpp"
+#include "manualmap.hpp"
 
 struct littlehook
 {

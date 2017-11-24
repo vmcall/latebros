@@ -1,6 +1,10 @@
 ﻿#include "stdafx.h"
 #include "detour.hpp"
-#include <string_view>
+
+#define STATUS_NOT_FOUND                 ((NTSTATUS)0xC0000225L)
+#define STATUS_SUCCESS                   ((NTSTATUS)0x00000000L)
+#define STATUS_INVALID_CID               ((NTSTATUS)0xC000000BL)
+#define STATUS_OBJECT_NAME_NOT_FOUND     ((NTSTATUS)0xC0000034L)
 
 constexpr static auto ROOTKIT_PREFIX = L"LB_";
 

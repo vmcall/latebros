@@ -1,6 +1,8 @@
 #include "stdafx.h"
+#include "process.hpp"
 #include "ntdll.hpp"
 #include "api_set.hpp"
+#include "detour.hpp"
 
 process::process(uint32_t id, DWORD desired_access)
 {
@@ -246,7 +248,7 @@ uintptr_t process::get_module_export(uintptr_t module_handle, const char* functi
 		if (export_base_size <= sizeof(IMAGE_EXPORT_DIRECTORY))
 		{
 			export_base_size = static_cast<DWORD>(export_data->AddressOfNameOrdinals - export_base
-				+ max(export_data->NumberOfFunctions, export_data->NumberOfNames) * 255);
+				+ std::max(export_data->NumberOfFunctions, export_data->NumberOfNames) * 255);
 
 			export_data_raw.reset(reinterpret_cast<IMAGE_EXPORT_DIRECTORY*>(malloc(export_base_size)));
 			export_data = export_data_raw.get();
