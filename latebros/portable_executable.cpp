@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "portable_executable.hpp"
 
 portable_executable::portable_executable(std::vector<uint8_t>& new_buffer) : buffer(new_buffer)
 {

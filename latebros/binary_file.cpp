@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "binary_file.hpp"
 
 std::vector<uint8_t> file::read_binary_file( const std::string& file_path )
 {

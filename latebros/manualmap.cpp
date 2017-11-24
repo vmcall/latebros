@@ -1,5 +1,7 @@
 #include "stdafx.h"
+#include "manualmap.hpp"
 #include "memory_section.hpp"
+#include "binary_file.hpp"
 #include "api_set.hpp"
 
 uintptr_t injection::manualmap::inject(const std::vector<uint8_t>& buffer)

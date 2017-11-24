@@ -1,6 +1,8 @@
 #include "stdafx.h"
+#include "process.hpp"
 #include "ntdll.hpp"
 #include "api_set.hpp"
+#include "detour.hpp"
 
 process::process(uint32_t id, DWORD desired_access)
 {
