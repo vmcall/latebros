@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "remote_detours.hpp"
-#include "logger.hpp"
 
 remote_detours::remote_detours(const process& process, std::uintptr_t mapping_address) 
 	: target_process(process)
@@ -72,7 +71,7 @@ bool remote_detours::reset_function(const hook_info& info,  const std::string& h
 	
 	// TODO SUSPEND PROCESS HERE TO AVOID RACES
 	if (const auto it = this->function_detours.find(function_address); it != this->function_detours.end())
-		return rewrite_bytes(it->second.original_bytes, function_address, it->second.exported_container);
+		return this->rewrite_bytes(it->second.original_bytes, function_address, it->second.exported_container);
 
 	logger::log_error("Failed to unhook function: import not found");
 	return false;
