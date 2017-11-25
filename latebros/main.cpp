@@ -4,6 +4,7 @@
 #include "binary_file.hpp"
 #include "manualmap.hpp"
 #include "remote_detours.hpp"
+#include <thread>
 
 struct littlehook
 {
@@ -22,7 +23,7 @@ int main()
 
 	// SETUP HOOK CONTAINER
 	// FORMAT: MODULE NAME, FUNCTION NAME, EXPORT NAME
-	std::vector<littlehook> container =
+	const std::vector<littlehook> container =
 	{
 		// HOOK *ONLY* SYSCALLS
 		{ "ntdll.dll", "NtOpenProcess",				"ntop" },
@@ -60,7 +61,11 @@ int main()
 			// HOOK FUNCTIONS
 			for (const auto& hook_data : container)
 				hooks.hook_function({hook_data.module_name, hook_data.function_name}, hook_data.hook_name);
-
+			/*
+			std::this_thread::sleep_for(std::chrono::seconds(10));
+			for (const auto& hook_data : container)
+				hooks.reset_function({hook_data.module_name, hook_data.function_name}, hook_data.hook_name);
+			*/
 			// FILL HEADER SECTION WITH PSEUDO-RANDOM DATA
 			auto junk_buffer = std::vector<std::uint8_t>(0x1000);
 			std::generate(junk_buffer.begin(), junk_buffer.end(), [] { return static_cast<uint8_t>(rng::get_int<uint16_t>(0x00, 0xFF)); }); 

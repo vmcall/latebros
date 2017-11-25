@@ -25,8 +25,16 @@ private:
 	const process& target_process;
 	std::uintptr_t mapping_address;
 
+	struct hook_data
+	{
+		std::uintptr_t   exported_container;
+		shellcode_buffer original_bytes;
+	};
+
 	std::unordered_map<std::uintptr_t, std::uintptr_t> import_entry_detours;
-	std::unordered_map<std::uintptr_t,  shellcode_buffer> function_detours;
+	std::unordered_map<std::uintptr_t,  hook_data> function_detours;
+
+	bool rewrite_bytes(const shellcode_buffer& buffer, std::uintptr_t function_address, std::uintptr_t buffer_address) const;
 
 	static shellcode_buffer generate_shellcode(std::uintptr_t hook_pointer) noexcept;
 };
