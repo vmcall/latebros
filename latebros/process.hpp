@@ -51,12 +51,18 @@ public:
 	template<class T>
 	inline bool write_memory(const T& buffer, const uintptr_t address) const
 	{
+		return write_raw_memory(&buffer, sizeof(T), address);
+	}
+
+	template<class T>
+	bool write_memory_safe(const T& buffer, const uintptr_t address) const
+	{
 		uint32_t old_protect;
 		auto result = this->virtual_protect(address, PAGE_EXECUTE_READWRITE, &old_protect);
 		if(result)
 			return false;
 		
-		result = write_raw_memory(reinterpret_cast<unsigned char*>(const_cast<T*>(&buffer)), sizeof(T), address);
+		result = write_raw_memory(&buffer, sizeof(T), address);
 		this->virtual_protect(old_protect, PAGE_EXECUTE_READWRITE, &old_protect);
 
 		return result;
@@ -69,6 +75,8 @@ public:
 	std::string get_name() const;
 	uintptr_t get_import(const std::string& module_name, const std::string& function_name) const;
 	uintptr_t get_module_export(uintptr_t module_handle, const char* function_ordinal) const;
+
+	uintptr_t get_module_export(const std::string& module_name, const char* function_ordinal) const;
 #pragma endregion
 
 #pragma region Thread

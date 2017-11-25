@@ -315,6 +315,26 @@ uintptr_t process::get_module_export(uintptr_t module_handle, const char* functi
 	return 0;
 }
 
+
+uintptr_t process::get_module_export(const std::string& module_name, const char* function_ordinal) const 
+{
+	const auto module_handle = reinterpret_cast<uintptr_t>(GetModuleHandleA(module_name.c_str())); // TODO: USE this->modules()
+	if(!module_handle)
+	{
+		logger::log_error("Failed to get module handle");
+		return 0;
+	}
+
+	const auto function_address = this->get_module_export(module_handle, function_ordinal);
+	if (!function_address)
+	{
+		logger::log_error("Failed to get module export");
+		return 0;
+	}
+
+	return function_address;
+}
+
 safe_handle process::create_thread(const uintptr_t address, const uintptr_t argument) const
 {
 	return safe_handle{ CreateRemoteThread(this->handle.get(), nullptr, 0, reinterpret_cast<LPTHREAD_START_ROUTINE>(address), reinterpret_cast<LPVOID>(argument), 0, nullptr) };

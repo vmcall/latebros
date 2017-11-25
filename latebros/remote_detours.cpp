@@ -8,45 +8,72 @@ remote_detours::remote_detours(const process& process, std::uintptr_t mapping_ad
 
 bool remote_detours::hook_function(const hook_info& info, const std::string& hook_name)
 {
+	logger::log_formatted("Hooking ", info.function_name);
 	// ADDRESS OF MAPPED MODULE IS NOT SET
 	if(!mapping_address)
-		return false;
-
-	// GET EXPORTED HOOK POINTER
-	auto module_handle = reinterpret_cast<uintptr_t>(GetModuleHandleA(info.module_name.c_str())); // TODO: USE this->modules()
-	auto function_address = this->target_process.get_module_export(module_handle, info.function_name.c_str());;
-
-	if (!function_address)
 	{
-		logger::log_error("Failed to get module export");
+		logger::log_error("Failed due to mapping address being not set");
 		return false;
 	}
+		
+	// GET EXPORTED HOOK POINTER
+	const auto function_address = this->target_process.get_module_export(info.module_name, info.function_name.c_str());
+	if(!function_address)
+		return false;
 
 	// READ OLD BYTES
 	shellcode_buffer original_bytes;
-	this->target_process.read_raw_memory(original_bytes.data(), function_address, sizeof(original_bytes));
+	if(!this->target_process.read_memory(&original_bytes, function_address))
+	{
+		logger::log_error("Failed to read original bytes");
+		return false;
+	}
 
 	// WRITE OLD BYTES TO EXPORTED DATA CONTAINER
 	auto exported_container = this->target_process.get_module_export(mapping_address, (hook_name + "_og").c_str());
-	this->target_process.write_raw_memory(original_bytes.data(), sizeof(original_bytes), exported_container);
+	if(!exported_container)
+	{
+		logger::log_error("Failed to get exported container");
+		return false;
+	}
+
+	if(!this->target_process.write_memory(original_bytes, exported_container))
+	{
+		logger::log_error("Failed to write original bytes to exported container");
+		return false;
+	}
 
 	// DETOUR FUNCTION
 	auto hook_pointer = this->target_process.get_module_export(mapping_address, hook_name.c_str());
+	if(!hook_pointer)
+	{
+		logger::log_error("Failed to get hook pointer");
+		return false;
+	}
+
 	auto shellcode = generate_shellcode(hook_pointer);
-	this->target_process.write_raw_memory(shellcode.data(), shellcode.size(), function_address);
+	if(!this->target_process.write_memory(shellcode, function_address))
+	{
+		logger::log_error("Failed to write generated shellcode");
+		return false;
+	}
 
-	this->function_detours.emplace(function_address, original_bytes);
-
-	logger::log_formatted("Detoured", info.function_name);
+	this->function_detours.emplace(function_address, hook_data{exported_container, original_bytes});
 	return true;
 }
 
 bool remote_detours::reset_function(const hook_info& info,  const std::string& hook_name)
 {
-	auto entry = this->target_process.get_import(info.module_name, info.function_name);
-	if (const auto it = this->function_detours.find(entry); it != this->function_detours.end())
-		return this->target_process.write_memory(it->second, it->first);
+	logger::log_formatted("Resetting ", info.function_name);
+	auto function_address = this->target_process.get_module_export(info.module_name, info.function_name.c_str());
+	if(!function_address)
+		return false;
+	
+	// TODO SUSPEND PROCESS HERE TO AVOID RACES
+	if (const auto it = this->function_detours.find(function_address); it != this->function_detours.end())
+		return this->rewrite_bytes(it->second.original_bytes, function_address, it->second.exported_container);
 
+	logger::log_error("Failed to unhook function: import not found");
 	return false;
 }
 
@@ -88,6 +115,25 @@ bool remote_detours::reset_import_entry(const hook_info& info, const uintptr_t h
 	return true;
 }
 
+
+bool remote_detours::rewrite_bytes(const shellcode_buffer& buffer, std::uintptr_t function_address, std::uintptr_t buffer_address) const 
+{
+	// OVERWRITE THE HOOK
+	if(!this->target_process.write_memory(buffer, function_address))
+	{
+		logger::log_error("Failed to rewrite hook bytes");
+		return false;
+	}
+
+	// OVERWRITE THE EXPORTED BUFFER WITH ORIGINAL BYTES
+	if(!this->target_process.write_memory(buffer, buffer_address))
+	{
+		logger::log_error("Failed to rewrite exported buffers bytes");
+		return false;
+	}
+
+	return true;
+}
 
 remote_detours::shellcode_buffer remote_detours::generate_shellcode(std::uintptr_t hook_pointer) noexcept
 {
