@@ -21,7 +21,6 @@ uintptr_t injection::manualmap::inject(const std::vector<uint8_t>& buffer)
 
 bool injection::manualmap::map_image(map_ctx& ctx)
 {
-
 	auto section = memory_section(PAGE_EXECUTE_READWRITE, ctx.pe.get_optional_header().SizeOfImage);
 
 	if (!section)
@@ -31,7 +30,7 @@ bool injection::manualmap::map_image(map_ctx& ctx)
 	}
 
 	// MAP SECTION INTO BOTH LOCAL AND REMOTE PROCESS
-	ctx.local_image = process::current_process().map(section);
+	ctx.local_image = get_current_process().map(section);
 	ctx.remote_image = this->process.map(section);
 
 	if (!ctx.local_image || !ctx.remote_image)

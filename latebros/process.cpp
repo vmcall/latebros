@@ -3,6 +3,63 @@
 #include "ntdll.hpp"
 #include "api_set.hpp"
 
+process get_current_process()
+{
+	return process(reinterpret_cast<HANDLE>(GetCurrentProcess()));
+}
+
+std::vector<process> get_all_processes()
+{
+	std::vector<process> processes;
+	unsigned long process_list[508], bytes_needed;
+
+	if (EnumProcesses(process_list, sizeof(process_list), &bytes_needed))
+	{
+		const auto size = bytes_needed / sizeof(unsigned long);
+		processes.reserve(size);
+		for (std::size_t i = 0; i < size; ++i)
+		{
+			auto proc = process(process_list[i], PROCESS_ALL_ACCESS);
+
+			if (!proc)
+				continue;
+			
+			processes.emplace_back(std::move(proc));
+		}
+	}
+	else
+		logger::log_win_error("process::get_all->EnumProcesses");
+
+	return processes;
+}
+
+std::vector<process> get_all_processes(const std::string& process_name)
+{
+	std::vector<process> processes;
+	unsigned long process_list[508], bytes_needed;
+	
+	if (EnumProcesses(process_list, sizeof(process_list), &bytes_needed))
+	{
+		const auto size = bytes_needed / sizeof(unsigned long);
+		processes.reserve(size);
+		for (std::size_t i = 0; i < size; ++i)
+		{
+			auto proc = process(process_list[i], PROCESS_ALL_ACCESS);
+
+			if (!proc)
+				continue;
+				
+			if(proc.get_name() == process_name)
+				processes.emplace_back(std::move(proc));
+		}
+	}
+	else
+		logger::log_win_error("process::get_all->EnumProcesses");
+
+	return processes;
+}
+
+
 process::process(uint32_t id, DWORD desired_access)
 	: handle(OpenProcess(desired_access, false, id))
 {
@@ -13,60 +70,9 @@ process::process(uint32_t id, DWORD desired_access)
 	}*/
 }
 
-process::operator bool()
+process::operator bool() const
 {
 	return static_cast<bool>(this->handle);
-}
-
-process process::current_process()
-{
-	return process(reinterpret_cast<HANDLE>(GetCurrentProcess()));
-}
-
-std::vector<std::uint32_t> process::get_all_from_name(const std::string& process_name)
-{
-	std::vector<std::uint32_t> processes;
-
-	unsigned long process_list[516], bytes_needed;
-	if (EnumProcesses(process_list, sizeof(process_list), &bytes_needed))
-	{
-		for (size_t index = 0; index < bytes_needed / sizeof(uint32_t); index++)
-		{
-			auto proc = process(process_list[index], PROCESS_ALL_ACCESS);
-
-			if (!proc)
-				continue;
-
-			if (process_name == proc.get_name())
-				processes.emplace_back(process_list[index]);
-		}
-	}
-	else
-		logger::log_win_error("EnumProcesses");
-
-	return processes;
-}
-std::vector<uint32_t> process::get_all()
-{
-	std::vector<uint32_t> processes;
-
-	DWORD process_list[516], bytes_needed;
-	if (EnumProcesses(process_list, sizeof(process_list), &bytes_needed))
-	{
-		for (size_t index = 0; index < bytes_needed / sizeof(uint32_t); index++)
-		{
-			auto proc = process(process_list[index], PROCESS_ALL_ACCESS);
-
-			if (!proc)
-				continue;
-			
-			processes.emplace_back(process_list[index]);
-		}
-	}
-	else
-		logger::log_win_error("process::get_all->EnumProcesses");
-
-	return processes;
 }
 
 MEMORY_BASIC_INFORMATION process::virtual_query(const uintptr_t address)

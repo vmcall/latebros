@@ -2,7 +2,13 @@
 #include "stdafx.h"
 #include "memory_section.hpp"
 
-//using wstring_converter = std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>;
+class process;
+
+process get_current_process();
+
+std::vector<process> get_all_processes();
+
+std::vector<process> get_all_processes(const std::string& process_name);
 
 class process
 {
@@ -10,13 +16,7 @@ public:
 	process(uint32_t id, DWORD desired_access);
 	process(HANDLE handle) : handle(handle) {}
 
-	explicit operator bool();
-
-#pragma region Statics
-	static process current_process();
-	static std::vector<uint32_t> get_all_from_name(const std::string& process_name);
-	static std::vector<uint32_t> get_all();
-#pragma endregion
+	explicit operator bool() const;
 
 #pragma region Memory
 	MEMORY_BASIC_INFORMATION virtual_query(const uintptr_t address);
