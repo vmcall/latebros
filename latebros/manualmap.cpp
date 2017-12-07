@@ -92,16 +92,12 @@ void injection::manualmap::relocate_image_by_delta(map_ctx& ctx)
 
 void injection::manualmap::fix_import_table(map_ctx& ctx)
 {
-	wstring_converter converter;
 	api_set api_schema;
 
 	for (const auto&[tmp_name, functions] : ctx.pe.get_imports(ctx.local_image))
 	{
 		auto module_name = tmp_name;
-
-		std::wstring wide_module_name = converter.from_bytes(module_name.c_str());
-		if (api_schema.query(wide_module_name))
-			module_name = converter.to_bytes(wide_module_name);
+		api_schema.query(module_name);
 
 		auto module_handle = find_or_map_dependency(module_name);
 		if (!module_handle)

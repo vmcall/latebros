@@ -193,8 +193,7 @@ uintptr_t process::get_import(const std::string& module_name, const std::string&
 		if(current_module_name.empty())
 			continue;
 
-		if(!api_schema.query(current_module_name))
-			continue;
+		api_schema.query(current_module_name);
 
 		// LOWERCASE FOR MORE CONSISTENT COMPARISON RESULTS
 		std::transform(current_module_name.begin(), current_module_name.end(), current_module_name.begin(), ::tolower);
