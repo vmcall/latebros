@@ -68,6 +68,7 @@ class api_set
 public:
 	api_set();
 	bool query(std::wstring& name) const;
+	bool query(std::string& name) const;
 private:
 	map_api_schema schema;
 };
