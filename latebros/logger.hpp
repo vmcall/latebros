@@ -1,13 +1,23 @@
 #pragma once
 #include "stdafx.h"
+#include <system_error>
 
 namespace logger
 {
-	inline void log(const std::string& message)
+	inline void log(const char* message)
 	{
 		std::cout << "[+] " << message << std::endl;
 	}
-	inline void log_error(const std::string& message)
+
+	inline void log_win_error(const char* cause)
+	{
+		const auto ec = std::error_code(static_cast<int>(GetLastError()), std::system_category());
+		std::cout << "[!] code: " << std::hex << ec.value()
+				<< " message: " << ec.message()
+				<< " what: " << cause << '\n';
+	}
+
+	inline void log_error(const char* message)
 	{
 		std::cout << "[!] " << message << std::endl;
 	}

@@ -3,6 +3,63 @@
 #include "ntdll.hpp"
 #include "api_set.hpp"
 
+process get_current_process()
+{
+	return process(reinterpret_cast<HANDLE>(GetCurrentProcess()));
+}
+
+std::vector<process> get_all_processes()
+{
+	std::vector<process> processes;
+	unsigned long process_list[508], bytes_needed;
+
+	if (EnumProcesses(process_list, sizeof(process_list), &bytes_needed))
+	{
+		const auto size = bytes_needed / sizeof(unsigned long);
+		processes.reserve(size);
+		for (std::size_t i = 0; i < size; ++i)
+		{
+			auto proc = process(process_list[i], PROCESS_ALL_ACCESS);
+
+			if (!proc)
+				continue;
+			
+			processes.emplace_back(std::move(proc));
+		}
+	}
+	else
+		logger::log_win_error("process::get_all->EnumProcesses");
+
+	return processes;
+}
+
+std::vector<process> get_all_processes(const std::string& process_name)
+{
+	std::vector<process> processes;
+	unsigned long process_list[508], bytes_needed;
+	
+	if (EnumProcesses(process_list, sizeof(process_list), &bytes_needed))
+	{
+		const auto size = bytes_needed / sizeof(unsigned long);
+		processes.reserve(size);
+		for (std::size_t i = 0; i < size; ++i)
+		{
+			auto proc = process(process_list[i], PROCESS_ALL_ACCESS);
+
+			if (!proc)
+				continue;
+				
+			if(proc.get_name() == process_name)
+				processes.emplace_back(std::move(proc));
+		}
+	}
+	else
+		logger::log_win_error("process::get_all->EnumProcesses");
+
+	return processes;
+}
+
+
 process::process(uint32_t id, DWORD desired_access)
 	: handle(OpenProcess(desired_access, false, id))
 {
@@ -13,63 +70,17 @@ process::process(uint32_t id, DWORD desired_access)
 	}*/
 }
 
-process::operator bool()
+process::operator bool() const
 {
 	return static_cast<bool>(this->handle);
-}
-
-process process::current_process()
-{
-	return process(reinterpret_cast<HANDLE>(GetCurrentProcess()));
-}
-
-std::vector<uint32_t> process::get_all_from_name(const std::string& process_name)
-{
-	std::vector<uint32_t> processes;
-
-	DWORD process_list[516], bytes_needed;
-	if (EnumProcesses(process_list, sizeof(process_list), &bytes_needed))
-	{
-		for (size_t index = 0; index < bytes_needed / sizeof(uint32_t); index++)
-		{
-			auto proc = process(process_list[index], PROCESS_ALL_ACCESS);
-
-			if (!proc)
-				continue;
-
-			if (process_name == proc.get_name())
-				processes.emplace_back(process_list[index]);
-		}
-	}
-
-	return processes;
-}
-std::vector<uint32_t> process::get_all()
-{
-	std::vector<uint32_t> processes;
-
-	DWORD process_list[516], bytes_needed;
-	if (EnumProcesses(process_list, sizeof(process_list), &bytes_needed))
-	{
-		for (size_t index = 0; index < bytes_needed / sizeof(uint32_t); index++)
-		{
-			auto proc = process(process_list[index], PROCESS_ALL_ACCESS);
-
-			if (!proc)
-				continue;
-			
-			processes.emplace_back(process_list[index]);
-		}
-	}
-
-	return processes;
 }
 
 MEMORY_BASIC_INFORMATION process::virtual_query(const uintptr_t address)
 {
 	MEMORY_BASIC_INFORMATION mbi;
 
-	VirtualQueryEx(this->handle.get(), reinterpret_cast<LPCVOID>(address), &mbi, sizeof(MEMORY_BASIC_INFORMATION));
+	if(!VirtualQueryEx(this->handle.get(), reinterpret_cast<LPCVOID>(address), &mbi, sizeof(MEMORY_BASIC_INFORMATION)))
+		logger::log_win_error("process::virtual_query->VirtualQueryEx");
 
 	return mbi;
 }
@@ -119,48 +130,58 @@ uintptr_t process::map(memory_section& section)
 
 std::unordered_map<std::string, uintptr_t> process::get_modules() const
 {
-	auto result = std::unordered_map<std::string, uintptr_t>();
+	std::unordered_map<std::string, uintptr_t> result;
 
 	HMODULE module_handles[1024];
 	DWORD size_needed;
 
 	if (EnumProcessModules(this->handle.get(), module_handles, sizeof(module_handles), &size_needed))
 	{
-		for (auto i = 0; i < size_needed / sizeof(HMODULE); i++)
+		for (std::size_t i = 0; i < size_needed / sizeof(HMODULE); i++)
 		{
-			CHAR szModName[MAX_PATH];
-			GetModuleBaseNameA(this->handle.get(), module_handles[i], szModName, MAX_PATH);
+			std::string module_name;
+			module_name.resize(MAX_PATH);
+			auto len = GetModuleBaseNameA(this->handle.get(), module_handles[i], module_name.data(), MAX_PATH);
+			if(!len) {
+				logger::log_win_error("process::get_modules->GetModuleBaseNameA");
+				continue;
+			}
 
-			std::string new_name = szModName;
-			std::transform(new_name.begin(), new_name.end(), new_name.begin(), ::tolower);
+			module_name.resize(len);
+			std::transform(module_name.begin(), module_name.end(), module_name.begin(), ::tolower);
 
-			result[new_name] = reinterpret_cast<uintptr_t>(module_handles[i]);
+			result[std::move(module_name)] = reinterpret_cast<uintptr_t>(module_handles[i]);
 		}
 	}
+	else
+		logger::log_win_error("process::get_modules->EnumProcessModules");
 
 	return result;
 }
 
 uintptr_t process::get_base_address() const
 {
-	std::string process_name = this->get_name();
+	auto process_name = this->get_name();
 	std::transform(process_name.begin(), process_name.end(), process_name.begin(), ::tolower);
 
 	for (const auto&[name, module_handle] : this->get_modules())
-	{
 		if (name == process_name)
 			return module_handle;
-	}
 
+	logger::log_error("process::get_base_address failed to find base");
 	return 0;
 }
 
 std::string process::get_name() const
 {
-	char buffer[MAX_PATH];
-	GetModuleBaseNameA(handle.get(), nullptr, buffer, MAX_PATH);
-
-	auto name = std::string(buffer);
+	std::string name;
+	name.resize(MAX_PATH);
+	auto len = GetModuleBaseNameA(handle.get(), nullptr, name.data(), MAX_PATH);
+	if(!len) {
+		logger::log_win_error("process::get_name->GetModuleBaseNameA");
+		return {};
+	}
+	name.resize(len);
 
 	std::transform(name.begin(), name.end(), name.begin(), ::tolower);
 
@@ -179,22 +200,18 @@ uintptr_t process::get_import(const std::string& module_name, const std::string&
 	auto import_table_address = image_base + nt_header.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress;
 
 	api_set api_schema;
-	wstring_converter converter;
 
 	this->read_memory(&import_table, import_table_address);
 	for (; import_table.Name; import_table_address += sizeof(IMAGE_IMPORT_DESCRIPTOR), this->read_memory(&import_table, import_table_address))
 	{
-		char name_buffer[100];
-		this->read_raw_memory(name_buffer, image_base + import_table.Name, sizeof(name_buffer));
-		std::string current_module_name = name_buffer;
+		auto current_module_name = read_string(image_base + import_table.Name, 128);
+		if(current_module_name.empty())
+			continue;
 
-		std::wstring wide_module_name = converter.from_bytes(current_module_name.c_str());
-		if (api_schema.query(wide_module_name))
-			current_module_name = converter.to_bytes(wide_module_name);
+		api_schema.query(current_module_name);
 
 		// LOWERCASE FOR MORE CONSISTENT COMPARISON RESULTS
 		std::transform(current_module_name.begin(), current_module_name.end(), current_module_name.begin(), ::tolower);
-
 		if (module_name != current_module_name)
 			continue;
 
@@ -215,7 +232,7 @@ uintptr_t process::get_import(const std::string& module_name, const std::string&
 				return image_base + import_table.FirstThunk + index;
 		}
 	}
-
+	logger::log_error("process::get_import failed to find import");
 	return 0;
 }
 
@@ -231,6 +248,7 @@ uintptr_t process::get_module_export(uintptr_t module_handle, const char* functi
 	auto export_base_size = nt_header.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].Size;
 	if (export_base) // CONTAINS EXPORTED FUNCTIONS
 	{
+		// TODO get rid of malloc or make a deleter that uses free
 		std::unique_ptr<IMAGE_EXPORT_DIRECTORY> export_data_raw(reinterpret_cast<IMAGE_EXPORT_DIRECTORY*>(malloc(export_base_size)));
 		auto export_data = export_data_raw.get();
 
@@ -314,7 +332,6 @@ uintptr_t process::get_module_export(uintptr_t module_handle, const char* functi
 
 	return 0;
 }
-
 
 uintptr_t process::get_module_export(const std::string& module_name, const char* function_ordinal) const 
 {

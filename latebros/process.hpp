@@ -2,7 +2,13 @@
 #include "stdafx.h"
 #include "memory_section.hpp"
 
-using wstring_converter = std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>;
+class process;
+
+process get_current_process();
+
+std::vector<process> get_all_processes();
+
+std::vector<process> get_all_processes(const std::string& process_name);
 
 class process
 {
@@ -10,13 +16,7 @@ public:
 	process(uint32_t id, DWORD desired_access);
 	process(HANDLE handle) : handle(handle) {}
 
-	explicit operator bool();
-
-#pragma region Statics
-	static process current_process();
-	static std::vector<uint32_t> get_all_from_name(const std::string& process_name);
-	static std::vector<uint32_t> get_all();
-#pragma endregion
+	explicit operator bool() const;
 
 #pragma region Memory
 	MEMORY_BASIC_INFORMATION virtual_query(const uintptr_t address);
@@ -29,7 +29,7 @@ public:
 	uintptr_t map(memory_section& section);
 
 	template <class T>
-	inline uintptr_t allocate_and_write(const T& buffer)
+	uintptr_t allocate_and_write(const T& buffer)
 	{
 		auto buffer_pointer = allocate(buffer);
 		write_memory(buffer, buffer_pointer);
@@ -37,36 +37,36 @@ public:
 	}
 
 	template <class T>
-	inline uintptr_t allocate()
+	uintptr_t allocate()
 	{
 		return raw_allocate(sizeof(T));
 	}
 
 	template<class T>
-	inline bool read_memory(T* buffer, const uintptr_t address) const
+	bool read_memory(T* buffer, const uintptr_t address) const
 	{
 		return read_raw_memory(buffer, address, sizeof(T));
 	}
 
 	template<class T>
-	inline bool write_memory(const T& buffer, const uintptr_t address) const
+	bool write_memory(const T& buffer, const uintptr_t address) const
 	{
 		return write_raw_memory(&buffer, sizeof(T), address);
 	}
 
-	template<class T>
-	bool write_memory_safe(const T& buffer, const uintptr_t address) const
+	std::string read_string(std::uintptr_t address, std::size_t max_chars) const
 	{
-		uint32_t old_protect;
-		auto result = this->virtual_protect(address, PAGE_EXECUTE_READWRITE, &old_protect);
-		if(result)
-			return false;
-		
-		result = write_raw_memory(&buffer, sizeof(T), address);
-		this->virtual_protect(old_protect, PAGE_EXECUTE_READWRITE, &old_protect);
+		std::string s;
+		s.resize(max_chars);
+		if(read_raw_memory(s.data(), address, max_chars))
+			if(auto it = s.find('\0'); it != std::string::npos) {
+				s.resize(it);
+				return s;
+			}
 
-		return result;
+		return {};
 	}
+
 #pragma endregion
 
 #pragma region Information

@@ -16,8 +16,6 @@ struct map_ctx
 		image_name(new_image_name), pe(new_buffer) {}
 };
 
-// DEPRECATED - TODO
-using wstring_converter = std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>;
 using module_list = std::unordered_map<std::string, uintptr_t>;
 
 namespace injection

@@ -21,7 +21,6 @@ uintptr_t injection::manualmap::inject(const std::vector<uint8_t>& buffer)
 
 bool injection::manualmap::map_image(map_ctx& ctx)
 {
-
 	auto section = memory_section(PAGE_EXECUTE_READWRITE, ctx.pe.get_optional_header().SizeOfImage);
 
 	if (!section)
@@ -31,7 +30,7 @@ bool injection::manualmap::map_image(map_ctx& ctx)
 	}
 
 	// MAP SECTION INTO BOTH LOCAL AND REMOTE PROCESS
-	ctx.local_image = process::current_process().map(section);
+	ctx.local_image = get_current_process().map(section);
 	ctx.remote_image = this->process.map(section);
 
 	if (!ctx.local_image || !ctx.remote_image)
@@ -92,16 +91,12 @@ void injection::manualmap::relocate_image_by_delta(map_ctx& ctx)
 
 void injection::manualmap::fix_import_table(map_ctx& ctx)
 {
-	wstring_converter converter;
 	api_set api_schema;
 
 	for (const auto&[tmp_name, functions] : ctx.pe.get_imports(ctx.local_image))
 	{
 		auto module_name = tmp_name;
-
-		std::wstring wide_module_name = converter.from_bytes(module_name.c_str());
-		if (api_schema.query(wide_module_name))
-			module_name = converter.to_bytes(wide_module_name);
+		api_schema.query(module_name);
 
 		auto module_handle = find_or_map_dependency(module_name);
 		if (!module_handle)

