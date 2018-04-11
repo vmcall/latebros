@@ -1,5 +1,5 @@
 # latebros
-x64 usermode rootkit. This was a project i made (with help from Daax and JustMagic) while researching usermode rootkits. Project is no longer under development nor is it finished.
+x64 usermode rootkit. This was a project i made (with help from Daax and JustMagic) while researching usermode rootkits. Project is neither under development nor finished.
 
 # Capabilities
 - Hide process from enumeration
